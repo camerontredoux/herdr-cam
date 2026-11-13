@@ -1,0 +1,11 @@
+{
+  "place": "none",
+  "title": "Cam",
+  "overlay": {
+    "kind": "popup",
+    "at": "top",
+    "offset": 40,
+    "width": 560,
+    "height": 0.7
+  }
+}

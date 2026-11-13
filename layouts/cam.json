@@ -1,0 +1,297 @@
+{
+  "id": "root",
+  "cloned_from": {
+    "name": "main",
+    "version": "0.1.12"
+  },
+  "type": "column",
+  "children": [
+    {
+      "id": "titlebar",
+      "type": "block",
+      "content": {
+        "mod": "cam",
+        "props": {
+          "role": "tabs",
+          "titlebar": true
+        }
+      },
+      "size": {
+        "px": 20
+      },
+      "window_drag": true
+    },
+    {
+      "id": "body",
+      "type": "row",
+      "children": [
+        {
+          "id": "sidebar",
+          "type": "row",
+          "children": [
+            {
+              "id": "sidebar-card",
+              "type": "column",
+              "children": [
+                {
+                  "id": "sidebar-lists",
+                  "type": "column",
+                  "children": [
+                    {
+                      "id": "spaces",
+                      "type": "block",
+                      "content": {
+                        "mod": "cam",
+                        "props": {
+                          "role": "sidebar"
+                        }
+                      },
+                      "size": {
+                        "weight": 1
+                      },
+                      "min": 90
+                    }
+                  ]
+                }
+              ],
+              "size": {
+                "weight": 1
+              },
+              "background": "canvas",
+              "radius": 8
+            }
+          ],
+          "size": {
+            "px": 258
+          },
+          "min": 26,
+          "max": 484,
+          "resizable": false
+        },
+        {
+          "id": "work",
+          "type": "column",
+          "children": [
+            {
+              "id": "tabs",
+              "type": "block",
+              "content": {
+                "mod": "cam",
+                "props": {
+                  "role": "tabs"
+                }
+              },
+              "size": {
+                "px": 31
+              }
+            },
+            {
+              "id": "work-body",
+              "type": "row",
+              "children": [
+                {
+                  "id": "panes",
+                  "type": "stack",
+                  "children": [
+                    {
+                      "id": "main",
+                      "type": "block",
+                      "content": {
+                        "tab": "active",
+                        "pane": {
+                          "header": {
+                            "content": {
+                              "mod": "cam",
+                              "props": {
+                                "role": "pane"
+                              }
+                            },
+                            "reveal": "always",
+                            "height": 30,
+                            "position": "top"
+                          },
+                          "background": "background",
+                          "border": {
+                            "width": 1,
+                            "color": "border"
+                          },
+                          "focus": {
+                            "width": 1,
+                            "color": "#585858"
+                          },
+                          "radius": 0,
+                          "gap": 4
+                        }
+                      },
+                      "background": "chrome",
+                      "padding": 4
+                    },
+                    {
+                      "id": "main-split",
+                      "type": "block",
+                      "content": {
+                        "tab": "active",
+                        "pane": {
+                          "header": {
+                            "content": {
+                              "mod": "cam",
+                              "props": {
+                                "role": "pane"
+                              }
+                            },
+                            "reveal": "always",
+                            "height": 30,
+                            "position": "top"
+                          },
+                          "background": "background",
+                          "border": {
+                            "width": 1,
+                            "color": "border"
+                          },
+                          "focus": {
+                            "width": 1,
+                            "color": "#585858"
+                          },
+                          "radius": 0,
+                          "gap": 4
+                        }
+                      },
+                      "background": "canvas",
+                      "padding": 4
+                    }
+                  ],
+                  "active": "main"
+                }
+              ],
+              "gap": 4
+            },
+            {
+              "id": "status",
+              "type": "block",
+              "content": {
+                "mod": "cam",
+                "props": {
+                  "role": "status"
+                }
+              },
+              "size": {
+                "px": 31
+              }
+            }
+          ],
+          "background": "chrome",
+          "border": {
+            "width": 1,
+            "color": "border"
+          },
+          "radius": 8,
+          "resizable": false
+        },
+        {
+          "id": "panel",
+          "type": "row",
+          "children": [
+            {
+              "id": "panel-grip",
+              "type": "block",
+              "size": {
+                "px": 4
+              },
+              "content": {
+                "mod": "cam",
+                "props": {
+                  "role": "grip",
+                  "edge": "panel"
+                }
+              }
+            },
+            {
+              "id": "panel-card",
+              "type": "column",
+              "children": [
+                {
+                  "id": "panel-body",
+                  "type": "stack",
+                  "children": [
+                    {
+                      "id": "files",
+                      "type": "block",
+                      "content": {
+                        "mod": "files"
+                      }
+                    },
+                    {
+                      "id": "changes",
+                      "type": "block",
+                      "content": {
+                        "mod": "changes"
+                      }
+                    },
+                    {
+                      "id": "harbor",
+                      "type": "block",
+                      "content": {
+                        "mod": "cam",
+                        "props": {
+                          "role": "harbor",
+                          "view": "chart"
+                        }
+                      }
+                    }
+                  ],
+                  "active": "files"
+                }
+              ],
+              "size": {
+                "weight": 1
+              },
+              "background": "chrome",
+              "border": {
+                "width": 1,
+                "color": "border"
+              },
+              "radius": 8
+            }
+          ],
+          "size": {
+            "px": 366
+          },
+          "min": 284,
+          "max": 904,
+          "hidden": true,
+          "resizable": false
+        }
+      ],
+      "gap": 0,
+      "resizable": false
+    }
+  ],
+  "background": "canvas",
+  "padding": 4,
+  "terminal_padding": [
+    4,
+    2
+  ],
+  "gap": 2,
+  "resizable": false,
+  "floating": [
+    {
+      "id": "toasts",
+      "content": {
+        "mod": "cam",
+        "props": {
+          "role": "toasts"
+        }
+      },
+      "edge": "bottom",
+      "align": "end"
+    }
+  ],
+  "titlebar": "none",
+  "traffic_lights": [
+    8,
+    6
+  ],
+  "preview": "layouts/cam.svg",
+  "terminal_menu": "cam-menu"
+}

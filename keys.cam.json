@@ -1,0 +1,39 @@
+{
+  "global": {
+    "cmd-q": "cam.quit",
+    "cmd-w": "cam.close-pane",
+    "cmd-p": "mod.open:cam",
+    "cmd-shift-p": "cam.palette",
+    "cmd-,": "cam.settings",
+    "cmd-shift-w": "cam.close-tab",
+    "f2": "cam.rename-tab",
+    "shift-f2": "cam.rename-space",
+    "cmd-e": "cam.collapse-sidebar",
+    "cmd-shift-e": "cam.toggle-harbor"
+  },
+  "mod:cam": {
+    "cmd-w": "cam.confirm",
+    "cmd-q": "cam.confirm"
+  },
+  "layout:cam": {
+    "ctrl-tab": "cam.tab-next",
+    "ctrl-shift-tab": "cam.tab-prev",
+    "cmd-shift-]": "cam.tab-next",
+    "cmd-shift-[": "cam.tab-prev",
+    "cmd-alt-]": "cam.space-next",
+    "cmd-alt-[": "cam.space-prev",
+    "alt-1": "cam.space-1",
+    "alt-2": "cam.space-2",
+    "alt-3": "cam.space-3",
+    "alt-4": "cam.space-4",
+    "alt-5": "cam.space-5",
+    "alt-6": "cam.space-6",
+    "alt-7": "cam.space-7",
+    "alt-8": "cam.space-8",
+    "alt-9": "cam.space-9",
+    "alt-shift-left": "cam.space-prev",
+    "alt-shift-right": "cam.space-next",
+    "alt-shift-up": "cam.tab-prev",
+    "alt-shift-down": "cam.tab-next"
+  }
+}
