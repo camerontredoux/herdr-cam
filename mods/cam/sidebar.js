@@ -6,7 +6,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, spaces, machines, panes, run, openOverlay, exec, hc, shared, setShared, watchFolder, window, setAgentOrder } from "herdr";
-import { narrow, agentName, spaceMark, SPACE_ORDER } from "./shared.js";
+import { narrow, agentName, spaceMark, SPACE_ORDER, RAIL_PR } from "./shared.js";
 import { TILE, spinner, colors, mono } from "./modules/ui/index.js";
 
 /** @typedef {import("./shared.js").Theme} Theme */
@@ -688,8 +688,11 @@ export class Sidebar extends View {
       .map(r => ({ id: r.w.id, group: r.tree ? group : (group = r.w.id) }));
     if (JSON.stringify(order) !== JSON.stringify(shared(SPACE_ORDER) ?? [])) setShared(SPACE_ORDER, order);
     return v_flex().size_full().min_h(0).text_size(13)
-      // 4 in on the right only: the window's edge gives the left its 4.
-      .child(v_flex().pt(4).flex_1().min_h(0).pr(4).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
+      // RAIL_PR in on the right only, open or rail: the window's edge gives the left its 4,
+      // part of it under the macOS border.
+      // Open: no top padding, so the first row (its label) starts at the main card's top edge.
+      // Rail: 4, the same as its sides, so the first tile's highlight isn't flush with the top.
+      .child(v_flex().pt(collapsed ? 4 : 0).flex_1().min_h(0).pr(RAIL_PR).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
         .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
         .children(this.grouped(t, collapsed)));
   }

@@ -37,10 +37,12 @@ import { layout, run, shared, spaces, terminals } from "herdr";
 
 // The collapsed sidebar (the rail) and the narrowest open width. The look (tiles, rows,
 // bars, colors) is the ui module's: ./modules/ui/index.js.
-// The rail: one square row tile (TILE, 22) and the list's 4 on the right; the window's
-// edge gives the left its 4. So a tile's highlight, and the creature inside it, sit as
+// The rail: one square row tile (TILE, 22) and RAIL_PR on its right. The left's 4 comes
+// from the window's edge, but macOS draws the window's border over about 2 of it; the right
+// gets 3, which looks the same. A tile's highlight, and the creature inside it, sit as
 // in the full list.
-export const RAIL = 26;
+export const RAIL_PR = 3;
+export const RAIL = 22 + RAIL_PR;
 export const FULL = 160;
 export const MAX = 480;
 // The width the sidebar opens to: wide enough that a full-screen terminal keeps its columns.

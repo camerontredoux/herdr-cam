@@ -1,7 +1,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { props, spaces, panes, agents, run, openOverlay, window, layout, settings, shared, setShared, nextCommand } from "herdr";
-import { RAIL, find, agentName, toggleSidebar, toggleSidebarHidden, togglePanel, fitPanel, syncPaneArea, navigate } from "./shared.js";
+import { RAIL, RAIL_PR, find, agentName, toggleSidebar, toggleSidebarHidden, togglePanel, fitPanel, syncPaneArea, navigate } from "./shared.js";
 import { TILE, ICON, spinner, colors, bar, barButton } from "./modules/ui/index.js";
 import { QUIT, CLOSE_PANE, newMenuHeight, closeTab, renameTab, renameSpace } from "./dialogs.js";
 import { openSettings } from "./settings.js";
@@ -135,7 +135,7 @@ export class Tabs extends View {
       // Without the window buttons (fullscreen, other systems): the sidebar button (20 square)
       // sits centered over the rail's tiles, which fill the rail but its 4 on the right
       // (sidebar.js). The strip already starts at the root's padding, as the rail does.
-      const left = lights ? (root.traffic_lights[0] + 52) / (/** @type {number} */ (settings().zoom) || 1) + 6 : (RAIL - 4) / 2 - 10;
+      const left = lights ? (root.traffic_lights[0] + 52) / (/** @type {number} */ (settings().zoom) || 1) + 6 : (RAIL - RAIL_PR) / 2 - 10;
       return h_flex().size_full().pl(left).pr(6).gap(2).items_center().bg(t.canvas)
         .children(tools(20))
         .child(div().flex_1())
