@@ -6,7 +6,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, spaces, machines, panes, run, openOverlay, exec, hc, shared, setShared, watchFolder, window, setAgentOrder } from "herdr";
-import { narrow, agentName, spaceMark, SPACE_ORDER, RAIL_PR } from "./shared.js";
+import { narrow, agentName, spaceMark, newMark, SPACE_ORDER, RAIL_PR } from "./shared.js";
 import { TILE, spinner, colors, mono } from "./modules/ui/index.js";
 
 /** @typedef {import("./shared.js").Theme} Theme */
@@ -513,21 +513,17 @@ export class Sidebar extends View {
       const empty = !mine.length && !loading(m) && connected && !rebuilt;
       const add = () => run("space.new", { machine: m ?? "" });
       const where = m ?? "this computer";
-      // An empty creature's spot: a solid MARK-sized block like the creatures, a + in it.
-      // Under the pointer its row turns the block's own shade, so the block steps up a shade.
+      // A dashed outline of a creature with a + inside (newMark); a shade lighter under the pointer.
       const newId = `machine-new-${m ?? "local"}`;
       const newHot = this.hotMachine === newId;
       const onNewHover = (over, cx) => { const next = over ? newId : this.hotMachine === newId ? null : this.hotMachine; if (next !== this.hotMachine) { this.hotMachine = next; cx.notify(); } };
-      // The sidebar's row is CHILD_H, so the block sits as far in from the left as from the
-      // top and bottom; the gap takes up the difference, so "New space" still lines up.
-      const INSET_NEW = (CHILD_H - MARK) / 2;
-      const slot = () => h_flex().size(MARK).flex_none().justify_center().items_center().rounded(5).bg(newHot ? t.selected : t.hover)
-        .child(svg("mods/workspace-chrome/plus.svg").size(12).text_color(newHot ? t.foreground : t.muted));
+      const slot = () => newMark(newHot ? t.muted : t.dim, MARK);
       // Rail: no labels, so no header for the first group and a short rule before each
       // next one (its machine in the tooltip). Folding is the sidebar's: the rail shows all.
       if (collapsed) {
+        // A tile like a space's: no fill, the hover shade under the pointer.
         const plus = h_flex().id(newId).size(SPACE_H).flex_none().justify_center().items_center().rounded(6)
-          .text_color(t.dim).cursor_pointer().hover(s => s.bg(t.hover).text_color(t.foreground))
+          .cursor_pointer().hover(s => s.bg(t.hover))
           .tooltip(`New space on ${where}`).on_click(add).on_hover(onNewHover)
           .child(slot());
         const rule = h_flex().id(id).w(SPACE_H).h(9).flex_none().justify_center().items_center().tooltip(m ?? "This computer")
@@ -552,7 +548,8 @@ export class Sidebar extends View {
           .when(folded || hover, el => el
             .child(svg(`mods/workspace-chrome/chevron-${folded ? "right" : "down"}.svg`).size(11).flex_none().text_color(t.dim)));
       if (rebuilt) return [head];
-      const newRow = h_flex().id(newId).h(CHILD_H).flex_none().mb(2).pl(INSET_NEW).pr(PAD).gap(GAP_NAME + PAD - INSET_NEW).items_center().rounded(6)
+      // Sized like a space's row (its creature in a TILE, PAD all round), so it matches the faces.
+      const newRow = h_flex().id(newId).h(TILE).flex_none().mb(2).px(PAD).gap(GAP_NAME).items_center().rounded(6)
         .text_size(12.5).text_color(t.muted).cursor_pointer().hover(s => s.bg(t.hover))
         .on_click(add).on_hover(onNewHover)
         .child(slot())
