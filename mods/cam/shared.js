@@ -37,10 +37,12 @@ import { layout, run, shared, spaces, terminals } from "herdr";
 
 // The collapsed sidebar (the rail) and the narrowest open width. The look (tiles, rows,
 // bars, colors) is the ui module's: ./modules/ui/index.js.
-// The rail: one square row tile (TILE, 22) and the list's 4 on the right; the window's
-// edge gives the left its 4. So a tile's highlight, and the creature inside it, sit as
+// The rail: one square row tile (TILE, 22) and RAIL_PR on its right. The left's 4 comes
+// from the window's edge, but macOS draws the window's border over about 2 of it; the right
+// gets 3, which looks the same. A tile's highlight, and the creature inside it, sit as
 // in the full list.
-export const RAIL = 26;
+export const RAIL_PR = 3;
+export const RAIL = 22 + RAIL_PR;
 export const FULL = 160;
 export const MAX = 480;
 // The width the sidebar opens to: wide enough that a full-screen terminal keeps its columns.
@@ -187,6 +189,23 @@ export function spaceMark(t, s, busy, size = 16) {
     .child(SHAPES[n % SHAPES.length](h_flex().bg(spaceColor(t, s)).items_center().justify_center(), k)
       .child(h_flex().gap(3.5 * k).pb(k).child(eye()).child(eye())
         .when(Boolean(busy), el => el.id(/** @type {string} */ (busy)).relative().loop("left", { from: -2 * k, to: 2 * k, period: 700 }))));
+}
+
+// The creature for a space that isn't there yet ("New space"): the ghost shape as a dashed
+// outline in `color`, no fill, a + in the same color where its eyes go. The outline is its
+// own layer, so the + centers on the whole shape (a border would push it off by its width);
+// the + is 7 across with a 1 stroke, so it lands on whole pixels.
+/** @param {Color} color @param {number} [size] */
+export function newMark(color, size = 16) {
+  const k = size / 16, arm = 7 * k, w = k;
+  const bar = (/** @type {boolean} */ across) => div().absolute().bg(color)
+    .when(across, el => el.w(arm).h(w).left(0).top((arm - w) / 2))
+    .when(!across, el => el.w(w).h(arm).top(0).left((arm - w) / 2));
+  const shape = SHAPES[5];
+  return h_flex().size(size).flex_none().items_center().justify_center()
+    .child(shape(h_flex().relative().items_center().justify_center(), k)
+      .child(shape(div().absolute().top(0).left(0).border(1.5 * k).border_dashed().border_color(color), k))
+      .child(div().relative().size(arm).child(bar(true)).child(bar(false))));
 }
 
 // The sidebar's space order, worktrees right after their repo's space: [{ id, group }],

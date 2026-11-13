@@ -6,7 +6,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, spaces, machines, panes, run, openOverlay, exec, hc, shared, setShared, watchFolder, window, setAgentOrder } from "herdr";
-import { narrow, agentName, spaceMark, SPACE_ORDER } from "./shared.js";
+import { narrow, agentName, spaceMark, newMark, SPACE_ORDER, RAIL_PR } from "./shared.js";
 import { TILE, spinner, colors, mono } from "./modules/ui/index.js";
 
 /** @typedef {import("./shared.js").Theme} Theme */
@@ -44,10 +44,10 @@ export function tone(t, status) {
 }
 
 // A space's row (and its rail tile): SPACE_H tall, its MARK-sized creature PAD in. Its rows
-// put their names under its name (PAD, the mark, 9 gap), and a worktree's or project's
+// put their names under its name (PAD, the mark, GAP_NAME), and a worktree's or project's
 // past their branch icon (13px, 7 gap).
-const SPACE_H = TILE, MARK = 16, PAD = (SPACE_H - MARK) / 2;
-const NAME_IN = PAD + MARK + 9, BRANCH_IN = 20;
+const SPACE_H = TILE, MARK = 16, PAD = (SPACE_H - MARK) / 2, GAP_NAME = 6;
+const NAME_IN = PAD + MARK + GAP_NAME, BRANCH_IN = 20, CHILD_H = TILE - 2;
 
 export class Sidebar extends View {
   /** @param {import("./shared.js").CamProps} _props @param {import("./shared.js").AsyncCx} cx */
@@ -80,6 +80,9 @@ export class Sidebar extends View {
     // The space whose row the pointer is on: its whole group shows the hover (grouped()).
     /** @type {string | null} */
     this.hot = null;
+    // The machine header under the pointer: it shows its chevron (grouped()).
+    /** @type {string | null} */
+    this.hotMachine = null;
     // Per space, its rows' panes in order: a click on the space you're in goes to the next.
     /** @type {Record<string, { pane: string, focused: boolean }[]>} */
     this.cycle = {};
@@ -367,8 +370,8 @@ export class Sidebar extends View {
           .when(count > 1, el => el.child(div().text_size(11).text_color(t.dim).child(String(count))))
           .child(markFor(a.status, p));
       // No tree line: the name lines up with the space's name (the mark is 3 in,
-      // 16 wide, 9 before the name), or under a worktree or project row with that row's.
-      return h_flex().id(`sp-ag-${a.address}`).relative().h(22).flex_none().pl(deep ? NAME_IN + BRANCH_IN : NAME_IN).pr(8).rounded(6).items_center()
+      // 16 wide, GAP_NAME before the name), or under a worktree or project row with that row's.
+      return h_flex().id(`sp-ag-${a.address}`).relative().h(CHILD_H).flex_none().pl(deep ? NAME_IN + BRANCH_IN : NAME_IN).pr(8).rounded(6).items_center()
         .when(a.focused && w.active, el => el.bg(t.selected))
         // hot: the pointer is on the group, so every row of it shows the hover shade, and the
         // row under the pointer in the focused row's shade, so you still see which one. The row you're in
@@ -377,7 +380,7 @@ export class Sidebar extends View {
         .when(hot && !(a.focused && w.active), el => el.bg(t.hover))
         .when(!(a.focused && w.active), el => el.hover(s => s.bg(hot ? t.selected : t.hover))).cursor_pointer()
         .on_click(() => run("pane.focus", { pane: a.pane }))
-        .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(a.focused && w.active ? t.foreground : t.muted).child(name))
+        .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(t.muted).child(name))
         .child(h_flex().min_w(14).flex_none().justify_center().child(mark));
     };
     /** @type {typeof lineEl} */
@@ -436,7 +439,7 @@ export class Sidebar extends View {
       rows[rows.indexOf(name)] = line(shell, name, nested, group[0].program, group.length);
     }
     for (const [project, workers] of byProject) {
-      rows.push(h_flex().id(`sp-fm-${w.id}/${project}`).h(22).flex_none().pl(NAME_IN).pr(8).gap(7).items_center()
+      rows.push(h_flex().id(`sp-fm-${w.id}/${project}`).h(CHILD_H).flex_none().pl(NAME_IN).pr(8).gap(7).items_center()
         .child(svg("mods/workspace-chrome/branch.svg").size(13).flex_none().text_color(t.muted))
         .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(t.foreground).child(project)));
       for (const a of workers) {
@@ -458,10 +461,9 @@ export class Sidebar extends View {
       const kids = this.agentRows(r.w, t, Boolean(r.tree), this.hot === r.w.id);
       if (!kids.length) return [this.row(r, t)];
       // A space with several rows: plain rows, each its own button, hover and highlight
-      // (only the focused row's, while it's the active space). The 2 between the space and
-      // its rows is the space row's own, so there's no dead line to click (none for a
-      // worktree's: flush).
-      const head = this.row(r, t).when(!r.tree, el => el.h(TILE + 2).pb(2));
+      // (only the focused row's, while it's the active space). Flush against its rows,
+      // which are CHILD_H: shorter than the space's row, so they sit close under its name.
+      const head = this.row(r, t);
       // Pointer anywhere on the group (this.hot): each of its rows gets the hover shade,
       // square so they join into one block, and the row you're in keeps its highlight (never
       // stacked: the colors are see-through). Pointer elsewhere: only that highlight.
@@ -500,26 +502,59 @@ export class Sidebar extends View {
       const connected = !m || machine?.state === "connected";
       const rebuilt = this.rebuilt(machine) || !!repair;
       const folded = this.folded.has(m);
-      const head = h_flex().id(m ? `machine-${m}` : "machines-local").h(TILE).flex_none().px((TILE - 13) / 2).gap(7).items_center().when(collapsed, el => el.size(SPACE_H).px(0).justify_center()).text_size(11).text_color(t.dim).rounded(6)
-        .cursor_pointer().hover(s => s.bg(t.hover))
-        .on_click((_e, cx) => {
-          folded ? this.folded.delete(m) : this.folded.add(m);
-          localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
-          cx.notify();
-        })
-        .child(svg(`mods/workspace-chrome/${m ? "server" : "monitor"}.svg`).size(13).flex_none())
-        .when(!collapsed, el => el.child(div().flex_1().truncate().when(!connected, el => el.opacity(0.5)).child(m ?? "This computer"))
-          .when(rebuilt, el => el.child(h_flex().flex_none().gap(3).items_center()
+      const id = m ? `machine-${m}` : "machines-local";
+      const hover = this.hotMachine === id;
+      const fold = (_e, cx) => {
+        folded ? this.folded.delete(m) : this.folded.add(m);
+        localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
+        cx.notify();
+      };
+      // A machine with no spaces (and none on the way): a row that makes one there.
+      const empty = !mine.length && !loading(m) && connected && !rebuilt;
+      const add = () => run("space.new", { machine: m ?? "" });
+      const where = m ?? "this computer";
+      // A dashed outline of a creature with a + inside (newMark); a shade lighter under the pointer.
+      const newId = `machine-new-${m ?? "local"}`;
+      const newHot = this.hotMachine === newId;
+      const onNewHover = (over, cx) => { const next = over ? newId : this.hotMachine === newId ? null : this.hotMachine; if (next !== this.hotMachine) { this.hotMachine = next; cx.notify(); } };
+      const slot = () => newMark(newHot ? t.muted : t.dim, MARK);
+      // Rail: no labels, so no header for the first group and a short rule before each
+      // next one (its machine in the tooltip). Folding is the sidebar's: the rail shows all.
+      if (collapsed) {
+        // A tile like a space's: no fill, the hover shade under the pointer.
+        const plus = h_flex().id(newId).size(SPACE_H).flex_none().justify_center().items_center().rounded(6)
+          .cursor_pointer().hover(s => s.bg(t.hover))
+          .tooltip(`New space on ${where}`).on_click(add).on_hover(onNewHover)
+          .child(slot());
+        const rule = h_flex().id(id).w(SPACE_H).h(9).flex_none().justify_center().items_center().tooltip(m ?? "This computer")
+          .child(div().w(12).h(1).bg(t.border));
+        return [...(m ? [rule] : []), ...(mine.length ? mine.flatMap(draw) : loading(m) ? [loadingRow(m)] : empty ? [plus] : [])];
+      }
+      // Sidebar: a section label, not a row. Bold dim text lined up with the creatures, no
+      // icon, no hover box, a little space above every group but the first, and the chevron
+      // only while folded or under the pointer.
+      const head = h_flex().id(id).h(TILE).flex_none().px(PAD).gap(6).items_center().when(m !== null, el => el.mt(4))
+          .text_size(11.5).font_semibold().text_color(hover ? t.muted : t.dim)
+          .cursor_pointer().on_click(fold)
+          .on_hover((over, cx) => { const next = over ? id : this.hotMachine === id ? null : this.hotMachine; if (next !== this.hotMachine) { this.hotMachine = next; cx.notify(); } })
+          .child(div().flex_1().truncate().when(!connected, el => el.opacity(0.5)).child(m ?? "This computer"))
+          .when(rebuilt, el => el.child(h_flex().flex_none().gap(3).items_center().font_normal().text_color(t.dim)
             .child(div().max_w(140).truncate().child(repair?.error || "rebuilt ·"))
             .child(div().id(`machine-connect-${m}`).text_color(repair?.error ? t.blocked : t.muted)
               .hover(s => s.text_color(t.foreground))
               .tooltip(repair?.error || "This machine was rebuilt or replaced. Click to connect to the new one.")
               .on_click((_e, cx) => { cx.stop_propagation(); this.reconnect(machine, cx); })
               .child(repair?.busy ? "Connecting…" : "Connect"))))
-          .when(!collapsed, el => el
-          .child(svg(`mods/workspace-chrome/chevron-${folded ? "right" : "down"}.svg`).size(11).flex_none())));
-      if (!collapsed && rebuilt) return [head];
-      return [head, ...(folded ? [] : mine.length ? mine.flatMap(draw) : loading(m) ? [loadingRow(m)] : [])];
+          .when(folded || hover, el => el
+            .child(svg(`mods/workspace-chrome/chevron-${folded ? "right" : "down"}.svg`).size(11).flex_none().text_color(t.dim)));
+      if (rebuilt) return [head];
+      // Sized like a space's row (its creature in a TILE, PAD all round), so it matches the faces.
+      const newRow = h_flex().id(newId).h(TILE).flex_none().mb(2).px(PAD).gap(GAP_NAME).items_center().rounded(6)
+        .text_size(12.5).text_color(t.muted).cursor_pointer().hover(s => s.bg(t.hover))
+        .on_click(add).on_hover(onNewHover)
+        .child(slot())
+        .child(div().flex_1().truncate().child("New space"));
+      return [head, ...(folded ? [] : mine.length ? mine.flatMap(draw) : loading(m) ? [loadingRow(m)] : empty ? [newRow] : [])];
     });
   }
 
@@ -591,7 +626,7 @@ export class Sidebar extends View {
           .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(t.foreground).child(w.name))
           .when(Boolean(g), el => el.child(this.gitCounts(/** @type {Git} */ (g), t)))
         : h_flex()
-          .gap(9)
+          .gap(GAP_NAME)
           .items_center()
           .child(spaceMark(t, w, w.status === "working" ? `row-eyes-${w.id}` : undefined, MARK))
           .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(w.name))
@@ -650,8 +685,11 @@ export class Sidebar extends View {
       .map(r => ({ id: r.w.id, group: r.tree ? group : (group = r.w.id) }));
     if (JSON.stringify(order) !== JSON.stringify(shared(SPACE_ORDER) ?? [])) setShared(SPACE_ORDER, order);
     return v_flex().size_full().min_h(0).text_size(13)
-      // 4 in on the right only: the window's edge gives the left its 4.
-      .child(v_flex().pt(4).flex_1().min_h(0).pr(4).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
+      // RAIL_PR in on the right only, open or rail: the window's edge gives the left its 4,
+      // part of it under the macOS border.
+      // Open: no top padding, so the first row (its label) starts at the main card's top edge.
+      // Rail: 4, the same as its sides, so the first tile's highlight isn't flush with the top.
+      .child(v_flex().pt(collapsed ? 4 : 0).flex_1().min_h(0).pr(RAIL_PR).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
         .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
         .children(this.grouped(t, collapsed)));
   }
