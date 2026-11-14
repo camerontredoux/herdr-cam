@@ -1,7 +1,7 @@
 // What cam's own parts agree on: the side cards' sizes and how they open, collapse and
 // resize; layout lookups; space colors, navigation and agent names. One place, so a size
 // changes once. The look is the ui module's (./modules/ui/index.js).
-import { div } from "gpui-kit";
+import { div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { layout, run, shared, spaces, terminals, window } from "herdr";
 import { TILE } from "./modules/ui/index.js";
@@ -41,16 +41,24 @@ import { TILE } from "./modules/ui/index.js";
 // The sidebar's left and right padding, open or rail: the one place they're tuned. The
 // layout's root has no padding (the sidebar and the main area meet at one full-height
 // hairline and run to the window's edges), so the sidebar pads its own left. In a window
-// macOS draws its 1px border over that 4, so the right takes 3 to look the same.
-// Fullscreen has no border, so the right takes the full 4.
-export const SIDEBAR_PL = 4;
-export const sidebarPr = () => (window()?.fullscreen ? 4 : 3);
+// macOS draws its 1px border over the left edge, so the left takes 5 there; fullscreen
+// has no border, so it takes 4. The right is 4 in both.
+// The rail has one fixed width (RAIL_W), so it and the main area beside it never move when
+// you enter or leave fullscreen. In fullscreen it splits the room evenly, 4.5 each side,
+// like the open sidebar's equal sides (a half point is one pixel on a Retina screen).
+/** @param {boolean} [onRail] */
+export const sidebarPl = (onRail = false) => (!window()?.fullscreen ? 5 : onRail ? 4.5 : 4);
+/** @param {boolean} [onRail] */
+export const sidebarPr = (onRail = false) => (window()?.fullscreen && onRail ? 4.5 : 4);
 // The sidebar draws the 1px hairline at its right edge itself (ui's sidebarEdge), inside
 // its width; the right padding is measured from that line.
 export const HAIRLINE = 1;
-// The rail: one square row tile, the sidebar's padding and its hairline. A tile's
-// highlight, and the creature inside it, sit as in the full list.
-export const rail = () => SIDEBAR_PL + TILE + sidebarPr() + HAIRLINE;
+// The rail: one square RAIL_TILE, the sidebar's padding and its hairline, as wide as the
+// tab bar is tall. Its creatures (RAIL_MARK) nearly fill the tile, so they're easy to tell apart.
+export const RAIL_TILE = TILE, RAIL_MARK = 20;
+// The window's padding (5 and 4) around the tile, in or out of fullscreen.
+export const RAIL_W = 5 + RAIL_TILE + 4 + HAIRLINE;
+export const rail = () => RAIL_W;
 export const FULL = 160;
 export const MAX = 480;
 // The width the sidebar opens to: wide enough that a full-screen terminal keeps its columns.
@@ -176,35 +184,51 @@ export function toggleSidebarHidden() {
 
 // Space colors, kept by id in shared "space.colors" (the sidebar assigns them).
 /** @type {Record<string, Color>} */
-export const MARK = { ansi6: "#3f9e8f", ansi3: "#cf8a5e", ansi4: "#6a8fd6", ansi5: "#8a78e0", ansi2: "#4f9a68", ansi1: "#c46f96" };
+// Six hues spread round the wheel, so no two spaces look alike (teal sat beside green).
+export const MARK = { ansi6: "#d8b04a", ansi3: "#e07f4f", ansi4: "#5b8ff0", ansi5: "#9a78ea", ansi2: "#55ad62", ansi1: "#e0699e" };
 /** @param {Theme} t @param {Space} s @returns {Color} */
 export function spaceColor(t, s) {
   if (s.name === "~") return t.dim;
   const c = (/** @type {Record<string, string>} */ (shared("space.colors")) ?? {})[s.id] ?? "ansi6";
   return c.startsWith("#") ? /** @type {Color} */ (c) : (MARK[c] ?? t[c]);
 }
-// A space's mark: a little creature in its color, its shape picked by its id, two eyes.
-// Given `busy` (an element id no other mark on screen has), the eyes dart side to side.
-// `size`: its box; the shape, eyes and dart scale with it (16 is an icon's size).
-/** @type {((el: import("gpui-kit").Element, k: number) => import("gpui-kit").Element)[]} */
-const SHAPES = [
-  (el, k) => el.size(16 * k).rounded_full(),
-  (el, k) => el.w(16 * k).h(12 * k).rounded(6 * k),
-  (el, k) => el.size(15 * k).rounded(5 * k),
-  (el, k) => el.size(16 * k).rounded(8 * k).rounded_tr(2 * k),
-  (el, k) => el.size(16 * k).rounded_tl(8 * k).rounded_br(8 * k).rounded_tr(2 * k).rounded_bl(2 * k),
-  (el, k) => el.w(15 * k).h(16 * k).rounded_t(8 * k).rounded_b(3 * k),
+// A space's mark: a little creature in its color, its silhouette picked by its color, two
+// eyes high on its body. Given `busy` (an element id no other mark on screen has), the eyes
+// dart side to side. `size`: its box; the shape, eyes and dart scale with it (16 is an icon's).
+// Silhouettes are SVGs (icons/creatures, each filling the same 15px square of a 16 box)
+// tinted the space's color; `eyes` is where
+// the eyes' top sits in that box, so they sit high on each body.
+const CREATURES = [
+  { file: "ball", eyes: 5 },
+  { file: "gumdrop", eyes: 5.5 },
+  { file: "squircle", eyes: 4.5 },
+  { file: "egg", eyes: 6.5 },
+  { file: "dome", eyes: 5 },
+  { file: "triangle", eyes: 8.5 },
 ];
+// Each palette color's silhouette (CREATURES' order), so spaces apart in color are apart in shape.
+/** @type {Record<string, number>} */
+const SHAPE_OF = { ansi6: 0, ansi1: 5, ansi5: 2, ansi3: 1, ansi2: 4, ansi4: 3 };
 /** @param {Theme} t @param {Space} s @param {string} [busy] @param {number} [size] */
 export function spaceMark(t, s, busy, size = 16) {
   const k = size / 16;
-  const n = [...s.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const eye = () => div().w(2.5 * k).h(3.5 * k).rounded_full().bg("#161616");
-  return h_flex().size(size).flex_none().items_center().justify_center()
-    .child(SHAPES[n % SHAPES.length](h_flex().bg(spaceColor(t, s)).items_center().justify_center(), k)
-      .child(h_flex().gap(3.5 * k).pb(k).child(eye()).child(eye())
-        .when(Boolean(busy), el => el.id(/** @type {string} */ (busy)).relative().loop("left", { from: -2 * k, to: 2 * k, period: 700 }))));
+  // A picked hex color, or none, falls back to a hash of the id.
+  const c = (/** @type {Record<string, string>} */ (shared("space.colors")) ?? {})[s.id];
+  const n = c && c in SHAPE_OF ? SHAPE_OF[c] : [...s.id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const shape = CREATURES[n % CREATURES.length];
+  // The eyes: two small ovals tilted like a highlight, a little right of center and high
+  // on the body (icons/creatures/eyes.svg, an 8x6 box), as in the reference creatures.
+  // A busy space's eyes dart left and back, never right of their spot, so they stay on the body.
+  return div().relative().size(size).flex_none()
+    .child(svg(`mods/cam/icons/creatures/${shape.file}.svg`).absolute().top(0).left(0).size(size).text_color(spaceColor(t, s)))
+    .child(h_flex().absolute().left(0).right(0).top((shape.eyes - 2.5) * k).justify_center().pl(4.5 * k)
+      .child(svg("mods/cam/icons/creatures/eyes.svg").w(8 * k).h(6 * k).text_color("#161616")
+        .when(Boolean(busy), el => el.id(/** @type {string} */ (busy)).relative().loop("left", { from: -2.5 * k, to: 0, period: 700 }))));
 }
+
+// The New space mark's outline: the old rounded ghost, drawn as a box so it can be dashed.
+/** @param {import("gpui-kit").Element} el @param {number} k */
+const GHOST = (el, k) => el.w(15 * k).h(16 * k).rounded_t(8 * k).rounded_b(3 * k);
 
 // The creature for a space that isn't there yet ("New space"): the ghost shape as a dashed
 // outline in `color`, no fill, a + in the same color where its eyes go. The outline is its
@@ -216,7 +240,7 @@ export function newMark(color, size = 16) {
   const bar = (/** @type {boolean} */ across) => div().absolute().bg(color)
     .when(across, el => el.w(arm).h(w).left(0).top((arm - w) / 2))
     .when(!across, el => el.w(w).h(arm).top(0).left((arm - w) / 2));
-  const shape = SHAPES[5];
+  const shape = GHOST;
   return h_flex().size(size).flex_none().items_center().justify_center()
     .child(shape(h_flex().relative().items_center().justify_center(), k)
       .child(shape(div().absolute().top(0).left(0).border(1.5 * k).border_dashed().border_color(color), k))

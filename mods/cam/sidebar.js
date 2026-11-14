@@ -6,7 +6,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, spaces, machines, panes, run, openOverlay, exec, hc, shared, setShared, watchFolder, window, setAgentOrder } from "herdr";
-import { narrow, agentName, spaceMark, newMark, SPACE_ORDER, SIDEBAR_PL, HAIRLINE, sidebarPr, syncRail } from "./shared.js";
+import { narrow, agentName, spaceMark, newMark, SPACE_ORDER, sidebarPl, HAIRLINE, sidebarPr, syncRail, RAIL_TILE, RAIL_MARK } from "./shared.js";
 import { TILE, spinner, colors, mono, sidebarEdge } from "./modules/ui/index.js";
 
 /** @typedef {import("./shared.js").Theme} Theme */
@@ -46,8 +46,13 @@ export function tone(t, status) {
 // A space's row (and its rail tile): SPACE_H tall, its MARK-sized creature PAD in. Its rows
 // put their names under its name (PAD, the mark, GAP_NAME), and a worktree's or project's
 // past their branch icon (13px, 7 gap).
-const SPACE_H = TILE, MARK = 16, PAD = (SPACE_H - MARK) / 2, GAP_NAME = 6;
-const NAME_IN = PAD + MARK + GAP_NAME, BRANCH_IN = 20, CHILD_H = TILE - 2;
+const SPACE_H = TILE, MARK = 16, PAD = 4, GAP_NAME = 6;
+// In the open list a space's creature is AV, beside its name and its first row (TILE +
+// CHILD_H tall together), as a chat list's avatar spans the name and the preview.
+const AV = 30, AV_GAP = 8;
+// How far the rail fades the creatures of spaces you're not in.
+const RAIL_FADE = 0.5;
+const NAME_IN = PAD + AV + AV_GAP, BRANCH_IN = 20, CHILD_H = TILE - 2;
 
 export class Sidebar extends View {
   /** @param {import("./shared.js").CamProps} _props @param {import("./shared.js").AsyncCx} cx */
@@ -86,6 +91,9 @@ export class Sidebar extends View {
     // Per space, its rows' panes in order: a click on the space you're in goes to the next.
     /** @type {Record<string, { pane: string, focused: boolean, tab?: string }[]>} */
     this.cycle = {};
+    // Per space, whether its first row (beside the creature) is the highlighted one.
+    /** @type {Record<string, boolean>} */
+    this.firstLit = {};
     /** @type {Machine[]} */
     this.machines = [];
     /** @type {Record<string, Reconnect>} */
@@ -346,6 +354,8 @@ export class Sidebar extends View {
     // Each row's click target, for the space's row to cycle through too.
     /** @type {Map<object, { pane: string, focused: boolean, tab?: string }>} */
     const targets = new Map();
+    /** @type {Set<any>} */
+    const lit = new Set();
     /** @type {Map<string, import("herdr").AgentInfo[]>} */
     const byProject = new Map();
     for (const a of mine.filter(a => tasks[a.address])) {
@@ -407,6 +417,7 @@ export class Sidebar extends View {
     const line = (a, ...rest) => {
       const el = lineEl(a, ...rest);
       targets.set(el, target(a, rest[4]));
+      if (a.focused && w.active) lit.add(el);
       return el;
     };
     const tabIds = new Set(w.tabs.map(tb => tb.id));
@@ -475,6 +486,9 @@ export class Sidebar extends View {
       }
     }
     this.cycle[w.id] = rows.map(r => targets.get(r)).filter(x => x !== undefined);
+    // Whether the row beside the creature (the first) is the highlighted one: grouped()
+    // then highlights the space's row with it, so the highlight wraps the whole creature.
+    this.firstLit[w.id] = lit.has(rows[0]);
     return rows;
   }
 
@@ -487,7 +501,12 @@ export class Sidebar extends View {
     const draw = (r) => {
       if (collapsed) return [this.compact(r, t)];
       const kids = this.agentRows(r.w, t, Boolean(r.tree), this.hot === r.w.id);
-      if (!kids.length) return [this.row(r, t)];
+      // The creature, drawn last so a row's highlight doesn't cover it; centered on the
+      // space's row and its first row below. Not for a worktree, which has none.
+      const avatar = () => div().absolute().left(PAD).top((TILE + CHILD_H - AV) / 2)
+        .child(spaceMark(t, r.w, r.w.status === "working" ? `row-eyes-${r.w.id}` : undefined, AV));
+      if (!kids.length) return [r.tree ? this.row(r, t)
+        : v_flex().relative().flex_none().h(TILE + CHILD_H).child(this.row(r, t)).child(avatar())];
       // A space with several rows: plain rows, each its own button, hover and highlight
       // (only the focused row's, while it's the active space). Flush against its rows,
       // which are CHILD_H: shorter than the space's row, so they sit close under its name.
@@ -497,11 +516,27 @@ export class Sidebar extends View {
       // stacked: the colors are see-through). Pointer elsewhere: only that highlight.
       if (kids.length > 1) {
         const hot = this.hot === r.w.id;
+        const square = (/** @type {any} */ k, /** @type {number} */ j) => j === kids.length - 1 ? k.rounded(0).rounded_b(6) : k.rounded(0);
+        // The row beside the creature is highlighted: it and the space's row are one block in
+        // its highlight (theirs cleared: the color is see-through), so it wraps the creature.
+        if (!r.tree && this.firstLit[r.w.id]) {
+          const clear = /** @type {Color} */ ("#00000000");
+          const top = v_flex().flex_none().rounded(6).bg(t.selected).when(hot, el => el.rounded(0).rounded_t(6))
+            .child(head.bg(clear).hover(s => s.bg(clear)).rounded(0))
+            .child(kids[0].bg(clear).hover(s => s.bg(clear)).rounded(0));
+          const rest = kids.slice(1);
+          return [v_flex().id(`grp-space-${r.w.id}`).flex_none().mb(2).rounded(6)
+            .on_hover((over, cx) => { const next = over ? r.w.id : this.hot === r.w.id ? null : this.hot; if (next !== this.hot) { this.hot = next; cx.notify(); } })
+            .child(top)
+            .children(hot ? rest.map((k, j) => square(k, j + 1)) : rest)
+            .relative().child(avatar())];
+        }
         return [v_flex().id(`grp-space-${r.w.id}`).flex_none().mb(2).rounded(6)
           .on_hover((over, cx) => { const next = over ? r.w.id : this.hot === r.w.id ? null : this.hot; if (next !== this.hot) { this.hot = next; cx.notify(); } })
           // The space's row stands for the group: no step of its own, its hover the group's shade.
           .child(head.when(hot, el => el.bg(t.hover).hover(s => s.bg(t.hover)).rounded(0).rounded_t(6)))
-          .children(hot ? kids.map((k, j) => j === kids.length - 1 ? k.rounded(0).rounded_b(6) : k.rounded(0)) : kids)];
+          .children(hot ? kids.map(square) : kids)
+          .relative().when(!r.tree, el => el.child(avatar()))];
       }
       // A space with one row: the two are one button. One highlight while it's the active
       // space, one hover, and either half's click lands in the same place (its only row).
@@ -510,7 +545,8 @@ export class Sidebar extends View {
       return [v_flex().id(`grp-space-${r.w.id}`).flex_none().mb(2).rounded(6)
         .when(r.w.active, el => el.bg(t.selected)).when(!r.w.active, el => el.hover(s => s.bg(t.hover)))
         .child(head.bg(clear).hover(s => s.bg(clear)))
-        .child(kids[0].bg(clear).hover(s => s.bg(clear)))];
+        .child(kids[0].bg(clear).hover(s => s.bg(clear)))
+        .relative().when(!r.tree, el => el.child(avatar()))];
     };
     const remote = [...new Set([...rows.map(r => r.w.machine).filter(Boolean), ...this.machines.map(m => m.name), ...Object.keys(this.reconnecting)])].sort();
     /** @param {string | null} m */
@@ -658,7 +694,8 @@ export class Sidebar extends View {
         : h_flex()
           .gap(GAP_NAME)
           .items_center()
-          .child(spaceMark(t, w, w.status === "working" ? `row-eyes-${w.id}` : undefined, MARK))
+          // Its creature is the group's (avatar(), drawn over its first two rows).
+          .pl(NAME_IN - PAD)
           .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(w.name))
           .when(Boolean(g), el => el.child(this.gitCounts(/** @type {Git} */ (g), t)))
       );
@@ -673,7 +710,7 @@ export class Sidebar extends View {
     const dot = w.status === "blocked" || w.status === "done";
     return h_flex()
       .id(`space-${w.id}`)
-      .size(SPACE_H)
+      .size(RAIL_TILE)
       .flex_none()
       .items_center()
       .justify_center()
@@ -683,7 +720,8 @@ export class Sidebar extends View {
       .tooltip(w.name)
       .on_click(() => run("space.select", { id: w.id }))
       .child(div().relative()
-        .child(spaceMark(t, w, working ? `rail-eyes-${w.id}` : undefined, MARK))
+        // The others fade, so the space you're in stands out (the rail has no names).
+        .child(spaceMark(t, w, working ? `rail-eyes-${w.id}` : undefined, RAIL_MARK).when(!w.active, el => el.opacity(RAIL_FADE)))
         .when(dot, (el) => el.child(div().absolute().right(-3).top(-3).size(7).rounded_full().bg(tone(t, w.status)).border(1.5).border_color(w.active ? t.selected : t.chrome))));
   }
 
@@ -719,11 +757,11 @@ export class Sidebar extends View {
       // The hairline and the main area's shadow (ui's sidebarEdge), first so the rows'
       // highlights cover the shadow.
       .child(sidebarEdge(t))
-      // SIDEBAR_PL and sidebarPr() in at the sides, open or rail, the right past the
+      // sidebarPl() and sidebarPr() in at the sides, open or rail, the right past the
       // hairline (shared.js).
       // Open: no top padding, so the first row (its label) starts at the main area's top edge.
       // Rail: 4, the same as its sides, so the first tile's highlight isn't flush with the top.
-      .child(v_flex().pt(collapsed ? 4 : 0).flex_1().min_h(0).pl(SIDEBAR_PL).pr(sidebarPr() + HAIRLINE).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
+      .child(v_flex().pt(collapsed ? 4 : 0).flex_1().min_h(0).pl(sidebarPl(collapsed)).pr(sidebarPr(collapsed) + HAIRLINE).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
         .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
         .children(this.grouped(t, collapsed)));
   }
