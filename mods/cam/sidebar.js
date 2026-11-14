@@ -6,8 +6,8 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, spaces, machines, panes, run, openOverlay, exec, hc, shared, setShared, watchFolder, window, setAgentOrder } from "herdr";
-import { narrow, agentName, spaceMark, newMark, SPACE_ORDER, RAIL_PR } from "./shared.js";
-import { TILE, spinner, colors, mono } from "./modules/ui/index.js";
+import { narrow, agentName, spaceMark, newMark, SPACE_ORDER, SIDEBAR_PL, HAIRLINE, sidebarPr, syncRail } from "./shared.js";
+import { TILE, spinner, colors, mono, sidebarEdge } from "./modules/ui/index.js";
 
 /** @typedef {import("./shared.js").Theme} Theme */
 /** @typedef {import("./shared.js").Color} Color */
@@ -84,7 +84,7 @@ export class Sidebar extends View {
     /** @type {string | null} */
     this.hotMachine = null;
     // Per space, its rows' panes in order: a click on the space you're in goes to the next.
-    /** @type {Record<string, { pane: string, focused: boolean }[]>} */
+    /** @type {Record<string, { pane: string, focused: boolean, tab?: string }[]>} */
     this.cycle = {};
     /** @type {Machine[]} */
     this.machines = [];
@@ -290,6 +290,13 @@ export class Sidebar extends View {
   }
 
   /** @param {Space} w */
+  /** Goes where a row's click points (`target` below).
+   * @param {Space} w its space @param {{ pane: string, tab?: string }} x */
+  go(w, x) {
+    if (!x.tab) { run("pane.focus", { pane: x.pane }); return; }
+    if (!w.active) run("space.select", { id: w.id });
+    run("tab.select", { id: x.tab });
+  }
   menu(w) {
     // A popup is as tall as its items; height is only the most.
     openOverlay({ mod: "cam", kind: "popup", width: 200, height: 4 * 2 + 5 * 22 + 5 * 2 + 5, props: { role: "menu", tab: "space", target: { id: w.id } } });
@@ -336,8 +343,8 @@ export class Sidebar extends View {
     const ps = panes();
     const mine = agents().filter(a => a.space === w.id);
     const plain = mine.filter(a => !tasks[a.address]);
-    // Each row's click target (the pane it focuses), for the space's row to cycle through.
-    /** @type {Map<object, { pane: string, focused: boolean }>} */
+    // Each row's click target, for the space's row to cycle through too.
+    /** @type {Map<object, { pane: string, focused: boolean, tab?: string }>} */
     const targets = new Map();
     /** @type {Map<string, import("herdr").AgentInfo[]>} */
     const byProject = new Map();
@@ -361,32 +368,45 @@ export class Sidebar extends View {
     /** @param {Pane} pn */
     const statusOf = pn => byPane.get(pn.pane)?.status ?? "idle";
     /**
+     * Where a row's click goes: its pane, or, for a split tab you're not in, the tab. Herdr
+     * then brings back the pane you were last on there, and its zoom. (None of a tab's
+     * panes is focused while you're elsewhere, so the row's pane is only its first agent.)
+     * @param {import("herdr").AgentInfo} a @param {Pane[]} [split]
+     */
+    const target = (a, split) => split && !split.some(pn => pn.focused)
+      ? { pane: a.pane, focused: false, tab: split[0].tab }
+      : { pane: a.pane, focused: Boolean(a.focused) };
+    /**
      * @param {import("herdr").AgentInfo} a @param {string} name @param {boolean} deep @param {any} p its program
      * @param {number} [count] shells sharing the row @param {Pane[]} [split] a split tab's panes, the row standing for them all
+     * @param {"first" | "mid" | "last"} [here] a pane row of the split tab you're in, and where in it
      */
-    const lineEl = (a, name, deep, p, count = 1, split) => {
+    const lineEl = (a, name, deep, p, count = 1, split, here) => {
       const mark = split ? h_flex().gap(5).items_center().children(split.map(pn => markFor(statusOf(pn), pn.program)))
         : h_flex().gap(5).items_center()
           .when(count > 1, el => el.child(div().text_size(11).text_color(t.dim).child(String(count))))
           .child(markFor(a.status, p));
       // No tree line: the name lines up with the space's name (the mark is 3 in,
       // 16 wide, GAP_NAME before the name), or under a worktree or project row with that row's.
-      return h_flex().id(`sp-ag-${a.address}`).relative().h(CHILD_H).flex_none().pl(deep ? NAME_IN + BRANCH_IN : NAME_IN).pr(8).rounded(6).items_center()
+      return h_flex().id(`sp-ag-${a.address}`).relative().h(CHILD_H).flex_none().pl(deep ? NAME_IN + BRANCH_IN : NAME_IN).pr(8).gap(3).rounded(6).items_center()
         .when(a.focused && w.active, el => el.bg(t.selected))
         // hot: the pointer is on the group, so every row of it shows the hover shade, and the
         // row under the pointer in the focused row's shade, so you still see which one. The row you're in
         // has no hover: there's nowhere for its click to go. (One .hover per row: a second
         // one replaces the first.)
-        .when(hot && !(a.focused && w.active), el => el.bg(t.hover))
+        // here: the split tab you're in, its pane rows in the same shade without the pointer,
+        // as one block: rounded at its top and bottom only.
+        .when((hot || Boolean(here)) && !(a.focused && w.active), el => el.bg(t.hover))
+        .when(Boolean(here), el => el.rounded_none().when(here === "first", r => r.rounded_t(6)).when(here === "last", r => r.rounded_b(6)))
         .when(!(a.focused && w.active), el => el.hover(s => s.bg(hot ? t.selected : t.hover))).cursor_pointer()
-        .on_click(() => run("pane.focus", { pane: a.pane }))
+        .on_click(() => this.go(w, target(a, split)))
         .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(t.muted).child(name))
         .child(h_flex().min_w(14).flex_none().justify_center().child(mark));
     };
     /** @type {typeof lineEl} */
     const line = (a, ...rest) => {
       const el = lineEl(a, ...rest);
-      targets.set(el, { pane: a.pane, focused: Boolean(a.focused) });
+      targets.set(el, target(a, rest[4]));
       return el;
     };
     const tabIds = new Set(w.tabs.map(tb => tb.id));
@@ -414,13 +434,21 @@ export class Sidebar extends View {
       if (!byTab.has(pn.tab)) byTab.set(pn.tab, []);
       /** @type {Pane[]} */ (byTab.get(pn.tab)).push(pn);
     }
-    // One row per tab, as the tab bar has. A split tab's row is named for its focused pane
-    // (else its first agent) and carries every pane's icon; a click goes to that pane.
+    // One row per tab, as the tab bar has. In the space you're in, a split tab has a row per
+    // pane, so a click goes straight to one. In other spaces it folds to one row, named for
+    // its first agent and carrying every pane's icon; a click goes to the tab (target).
     // A tab of one shell: shells with the same name share one row, where the first sits,
     // with their count; a click goes to the next of them after the focused one.
     /** @type {Map<string, Pane[]>} */
     const shells = new Map();
     for (const list of byTab.values()) {
+      if (list.length > 1 && w.active) {
+        // The tab you're in: its rows share the hover shade, so you see which panes it holds.
+        const here = list.some(pn => pn.focused);
+        list.forEach((pn, i) => rows.push(line(byPane.get(pn.pane) ?? shellOf(pn), nameOf(pn), nested, pn.program, 1, undefined,
+          here ? (i === 0 ? "first" : i === list.length - 1 ? "last" : "mid") : undefined)));
+        continue;
+      }
       if (list.length > 1) {
         const lead = list.find(pn => pn.focused) ?? list.find(pn => byPane.has(pn.pane)) ?? list[0];
         const a = byPane.get(lead.pane) ?? shellOf(lead);
@@ -526,7 +554,9 @@ export class Sidebar extends View {
           .cursor_pointer().hover(s => s.bg(t.hover))
           .tooltip(`New space on ${where}`).on_click(add).on_hover(onNewHover)
           .child(slot());
-        const rule = h_flex().id(id).w(SPACE_H).h(9).flex_none().justify_center().items_center().tooltip(m ?? "This computer")
+        // 5 tall: with the rail's 4 on top, a tile and GAP, its line lands 30 down, on the
+        // tab bar's line (TILE + 2 * INSET) when the group above is one tile (as the + is).
+        const rule = h_flex().id(id).w(SPACE_H).h(5).flex_none().justify_center().items_center().tooltip(m ?? "This computer")
           .child(div().w(12).h(1).bg(t.border));
         return [...(m ? [rule] : []), ...(mine.length ? mine.flatMap(draw) : loading(m) ? [loadingRow(m)] : empty ? [plus] : [])];
       }
@@ -613,7 +643,7 @@ export class Sidebar extends View {
         // The space you're in: on to its next row (from the one you're in, round to the first).
         else if (from === i && w.active && this.cycle[w.id]?.length) {
           const list = this.cycle[w.id], at = list.findIndex(x => x.focused);
-          run("pane.focus", { pane: list[(at + 1) % list.length].pane });
+          this.go(w, list[(at + 1) % list.length]);
         } else if (from === i) run("space.select", { id: w.id });
         cx.notify();
       })
@@ -684,12 +714,16 @@ export class Sidebar extends View {
     const order = [null, ...remote].flatMap(m => rows.filter(r => (r.w.machine ?? null) === m))
       .map(r => ({ id: r.w.id, group: r.tree ? group : (group = r.w.id) }));
     if (JSON.stringify(order) !== JSON.stringify(shared(SPACE_ORDER) ?? [])) setShared(SPACE_ORDER, order);
-    return v_flex().size_full().min_h(0).text_size(13)
-      // RAIL_PR in on the right only, open or rail: the window's edge gives the left its 4,
-      // part of it under the macOS border.
-      // Open: no top padding, so the first row (its label) starts at the main card's top edge.
+    syncRail();
+    return v_flex().relative().size_full().min_h(0).text_size(13)
+      // The hairline and the main area's shadow (ui's sidebarEdge), first so the rows'
+      // highlights cover the shadow.
+      .child(sidebarEdge(t))
+      // SIDEBAR_PL and sidebarPr() in at the sides, open or rail, the right past the
+      // hairline (shared.js).
+      // Open: no top padding, so the first row (its label) starts at the main area's top edge.
       // Rail: 4, the same as its sides, so the first tile's highlight isn't flush with the top.
-      .child(v_flex().pt(collapsed ? 4 : 0).flex_1().min_h(0).pr(RAIL_PR).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
+      .child(v_flex().pt(collapsed ? 4 : 0).flex_1().min_h(0).pl(SIDEBAR_PL).pr(sidebarPr() + HAIRLINE).pb(10).gap(2).when(collapsed, el => el.items_center()).overflow_y_scrollbar().mode("always")
         .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
         .children(this.grouped(t, collapsed)));
   }

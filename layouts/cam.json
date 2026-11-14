@@ -7,21 +7,6 @@
   "type": "column",
   "children": [
     {
-      "id": "titlebar",
-      "type": "block",
-      "content": {
-        "mod": "cam",
-        "props": {
-          "role": "tabs",
-          "titlebar": true
-        }
-      },
-      "size": {
-        "px": 20
-      },
-      "window_drag": true
-    },
-    {
       "id": "body",
       "type": "row",
       "children": [
@@ -33,6 +18,21 @@
               "id": "sidebar-card",
               "type": "column",
               "children": [
+                {
+                  "id": "titlebar",
+                  "type": "block",
+                  "content": {
+                    "mod": "cam",
+                    "props": {
+                      "role": "tabs",
+                      "titlebar": true
+                    }
+                  },
+                  "size": {
+                    "px": 31
+                  },
+                  "window_drag": true
+                },
                 {
                   "id": "sidebar-lists",
                   "type": "column",
@@ -57,8 +57,8 @@
               "size": {
                 "weight": 1
               },
-              "background": "canvas",
-              "radius": 8
+              "radius": 8,
+              "background": "canvas"
             }
           ],
           "size": {
@@ -83,7 +83,8 @@
               },
               "size": {
                 "px": 31
-              }
+              },
+              "window_drag": true
             },
             {
               "id": "work-body",
@@ -99,6 +100,9 @@
                       "content": {
                         "tab": "active",
                         "pane": {
+                          "background": "background",
+                          "radius": 0,
+                          "gap": 1,
                           "header": {
                             "content": {
                               "mod": "cam",
@@ -106,25 +110,14 @@
                                 "role": "pane"
                               }
                             },
-                            "reveal": "always",
-                            "height": 30,
-                            "position": "top"
-                          },
-                          "background": "background",
-                          "border": {
-                            "width": 1,
-                            "color": "border"
-                          },
-                          "focus": {
-                            "width": 1,
-                            "color": "#585858"
-                          },
-                          "radius": 0,
-                          "gap": 4
+                            "height": 22,
+                            "position": "top",
+                            "reveal": "always"
+                          }
                         }
                       },
-                      "background": "chrome",
-                      "padding": 4
+                      "background": "background",
+                      "padding": 0
                     },
                     {
                       "id": "main-split",
@@ -132,6 +125,9 @@
                       "content": {
                         "tab": "active",
                         "pane": {
+                          "background": "background",
+                          "radius": 0,
+                          "gap": 1,
                           "header": {
                             "content": {
                               "mod": "cam",
@@ -139,25 +135,14 @@
                                 "role": "pane"
                               }
                             },
-                            "reveal": "always",
-                            "height": 30,
-                            "position": "top"
-                          },
-                          "background": "background",
-                          "border": {
-                            "width": 1,
-                            "color": "border"
-                          },
-                          "focus": {
-                            "width": 1,
-                            "color": "#585858"
-                          },
-                          "radius": 0,
-                          "gap": 4
+                            "height": 22,
+                            "position": "top",
+                            "reveal": "always"
+                          }
                         }
                       },
-                      "background": "canvas",
-                      "padding": 4
+                      "background": "border",
+                      "padding": 0
                     }
                   ],
                   "active": "main"
@@ -176,15 +161,11 @@
               },
               "size": {
                 "px": 31
-              }
+              },
+              "hidden": true
             }
           ],
           "background": "chrome",
-          "border": {
-            "width": 1,
-            "color": "border"
-          },
-          "radius": 8,
           "resizable": false
         },
         {
@@ -267,12 +248,12 @@
     }
   ],
   "background": "canvas",
-  "padding": 4,
+  "padding": 0,
   "terminal_padding": [
-    4,
-    2
+    0,
+    0
   ],
-  "gap": 2,
+  "gap": 0,
   "resizable": false,
   "floating": [
     {
@@ -290,8 +271,9 @@
   "titlebar": "none",
   "traffic_lights": [
     8,
-    6
+    8
   ],
   "preview": "layouts/cam.svg",
-  "terminal_menu": "cam-menu"
+  "terminal_menu": "cam-menu",
+  "movable": false
 }

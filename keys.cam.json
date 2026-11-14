@@ -6,6 +6,10 @@
     "cmd-shift-p": "cam.palette",
     "cmd-,": "cam.settings",
     "cmd-shift-w": "cam.close-tab",
+    "cmd-alt-shift-left": "cam.move-pane-left",
+    "cmd-alt-shift-right": "cam.move-pane-right",
+    "cmd-alt-shift-up": "cam.move-pane-up",
+    "cmd-alt-shift-down": "cam.move-pane-down",
     "f2": "cam.rename-tab",
     "shift-f2": "cam.rename-space",
     "cmd-e": "cam.collapse-sidebar",
@@ -31,9 +35,9 @@
     "alt-7": "cam.space-7",
     "alt-8": "cam.space-8",
     "alt-9": "cam.space-9",
-    "alt-shift-left": "cam.space-prev",
-    "alt-shift-right": "cam.space-next",
-    "alt-shift-up": "cam.tab-prev",
-    "alt-shift-down": "cam.tab-next"
+    "alt-shift-left": "cam.tab-prev",
+    "alt-shift-right": "cam.tab-next",
+    "alt-shift-up": "cam.space-prev",
+    "alt-shift-down": "cam.space-next"
   }
 }

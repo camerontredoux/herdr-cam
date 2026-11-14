@@ -6,7 +6,7 @@
 // Containers inset 4 all round; rows 2 apart; titles 11.5 dim, 10 in from the edge.
 // Headers and footers are bars: one tile tall plus INSET above and below and a 1px line
 // on the side facing the content, so every bar is BAR px and they all line up.
-import { div } from "gpui-kit";
+import { div, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, settings } from "herdr";
 
@@ -31,6 +31,10 @@ export const GAP = 2;
 // A header's or footer's height, its line included. layouts/cam.json sizes the tab bar
 // and status bar blocks to match ("tabs" and "status", 31).
 export const BAR = TILE + 2 * INSET + 1;
+// A pane's header (cam's pane.js), shown when a tab is split: one tile tall, a label
+// strip rather than a bar. An unfocused pane's header fades its name to this.
+export const PANE_HEAD = TILE;
+export const PANE_HEAD_FADE = 0.5;
 // A text footer's side padding (the status bar's), for bars of words rather than tiles.
 export const TEXT_BAR_PAD = 14;
 
@@ -47,6 +51,23 @@ export const heading = (t, text) => h_flex().h(TILE).flex_none().px(10 - INSET).
 export const hint = (t, text) => div().flex_none().text_size(11.5).text_color(t.dim).child(text);
 /** @param {Theme} t */
 export const divider = t => div().h(1).flex_none().mx(2).my(2).bg(t.border);
+// The sidebar's right edge, drawn by each sidebar block: the 1px hairline where it meets
+// the main area, and the main area's shadow on the sidebar: soft strips darkest at the
+// hairline. Each block draws its own (not the layout's divider) so a block can leave it
+// out: over the rail, the window buttons' strip has none, so no line crosses the buttons. Four equal faint ramps, each half as wide as the last,
+// stack into a curve that steepens toward the edge like a blurred shadow; one ramp, or a
+// strong narrow one, reads as a hard line. The layout's own `shadow`
+// is too faint to see on a dark canvas. First child of a relative() block, so it paints
+// under the rows and a row's highlight covers it (rows keep clear of the hairline); it
+// has no handlers, so clicks and hovers go through.
+export const SHADE = 24;
+const RECT = () => PathBuilder.fill().move_to("0%", "0%").line_to("100%", "0%").line_to("100%", "100%").line_to("0%", "100%").close().build();
+/** @param {number} w @param {import("gpui-kit").Color} edge */
+const shadeLayer = (w, edge) => window.paint_path(RECT(), Background.linear_gradient(90, "#00000000", edge)).absolute().top(0).right(1).h_full().w(w);
+/** @param {Theme} t */
+export const sidebarEdge = t => div().absolute().top(0).right(0).h_full().w(SHADE + 1)
+  .children([SHADE, SHADE / 2, SHADE / 4, SHADE / 8].map(w => shadeLayer(w, "#0000000d")))
+  .child(div().absolute().top(0).right(0).h_full().w(1).bg(t.border));
 // A dialog's body: the sidebar's surface inside Herdr's frame.
 /** @param {Theme} t @param {string} id */
 export const panel = (t, id) => v_flex().id(id).w_full().min_h(0).p(INSET).gap(GAP).bg(t.chrome).text_size(13);

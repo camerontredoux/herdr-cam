@@ -37,7 +37,12 @@ Harbor.confirm = (ask) => openOverlay({ mod: "cam", kind: "dialog", ...CONFIRM_S
 /** @typedef {import("./shared.js").CamProps} CamProps */
 
 /** @type {Record<string, import("gpui-kit").ViewClass>} */
+// The stand-in pane move-pane.js splits off and closes again within a few frames.
+class Blank extends View { render() { return v_flex(); } }
+
 const ROLES = {
+  // move-pane.js's placeholder.
+  blank: Blank,
   tabs: Tabs, sidebar: Sidebar, grip: Grip, status: Status, pane: Pane,
   // Modules (./modules).
   harbor: Harbor, "harbor-confirm": ManifestConfirm,

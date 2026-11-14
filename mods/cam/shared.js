@@ -3,7 +3,8 @@
 // changes once. The look is the ui module's (./modules/ui/index.js).
 import { div } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { layout, run, shared, spaces, terminals } from "herdr";
+import { layout, run, shared, spaces, terminals, window } from "herdr";
+import { TILE } from "./modules/ui/index.js";
 
 /** @typedef {import("gpui-kit").Color} Color */
 /** @typedef {import("gpui-kit").NativeElement} El */
@@ -37,12 +38,19 @@ import { layout, run, shared, spaces, terminals } from "herdr";
 
 // The collapsed sidebar (the rail) and the narrowest open width. The look (tiles, rows,
 // bars, colors) is the ui module's: ./modules/ui/index.js.
-// The rail: one square row tile (TILE, 22) and RAIL_PR on its right. The left's 4 comes
-// from the window's edge, but macOS draws the window's border over about 2 of it; the right
-// gets 3, which looks the same. A tile's highlight, and the creature inside it, sit as
-// in the full list.
-export const RAIL_PR = 3;
-export const RAIL = 22 + RAIL_PR;
+// The sidebar's left and right padding, open or rail: the one place they're tuned. The
+// layout's root has no padding (the sidebar and the main area meet at one full-height
+// hairline and run to the window's edges), so the sidebar pads its own left. In a window
+// macOS draws its 1px border over that 4, so the right takes 3 to look the same.
+// Fullscreen has no border, so the right takes the full 4.
+export const SIDEBAR_PL = 4;
+export const sidebarPr = () => (window()?.fullscreen ? 4 : 3);
+// The sidebar draws the 1px hairline at its right edge itself (ui's sidebarEdge), inside
+// its width; the right padding is measured from that line.
+export const HAIRLINE = 1;
+// The rail: one square row tile, the sidebar's padding and its hairline. A tile's
+// highlight, and the creature inside it, sit as in the full list.
+export const rail = () => SIDEBAR_PL + TILE + sidebarPr() + HAIRLINE;
 export const FULL = 160;
 export const MAX = 480;
 // The width the sidebar opens to: wide enough that a full-screen terminal keeps its columns.
@@ -65,7 +73,7 @@ export const GRIP = 4;
  * @typedef {{ grip: "left" | "right", reset: number, min: number, max: number, rail?: number, remember?: string }} Edge */
 /** @type {Record<EdgeId, Edge>} */
 export const EDGES = {
-  sidebar: { grip: "right", reset: OPEN, min: FULL, max: MAX, rail: RAIL, remember: "sidebar.width" },
+  sidebar: { grip: "right", reset: OPEN, min: FULL, max: MAX, get rail() { return rail(); }, remember: "sidebar.width" },
   panel: { grip: "left", reset: PANEL, min: 280, max: 900, remember: "panel.width" },
 };
 
@@ -102,7 +110,14 @@ export const narrow = () => (cardWidth("sidebar") ?? Infinity) < FULL;
 // Dragging the edge is the grip's.
 export function toggleSidebar() {
   if (find(layout(), "sidebar")?.hidden) { run("layout.show", { id: "sidebar" }); return; }
-  resizeCard("sidebar", (cardWidth("sidebar") ?? Infinity) < FULL ? OPEN : RAIL);
+  resizeCard("sidebar", (cardWidth("sidebar") ?? Infinity) < FULL ? OPEN : rail());
+}
+
+// The rail's width follows fullscreen (rail()), so a rail sized before the switch is
+// resized to match. Every width below FULL is the rail (the grip snaps there).
+export function syncRail() {
+  const w = cardWidth("sidebar");
+  if (w !== null && w < FULL && w !== rail()) resizeCard("sidebar", rail());
 }
 
 // The pane area: a 4px gap around the panes always (so nothing moves on a tab switch),
