@@ -50,6 +50,14 @@ const SPACE_H = TILE, MARK = 16, PAD = 4, GAP_NAME = 6;
 // In the open list a space's creature is AV, beside its name and its first row (TILE +
 // CHILD_H tall together), as a chat list's avatar spans the name and the preview.
 const AV = 30, AV_GAP = 8;
+// A row's hover inside a block already in the hover shade: half its strength, so a hovered
+// row stays darker than the row you're in (t.selected). The colors are see-through: the full
+// hover on top of the block's came out lighter than selected. An opaque hover stays as is.
+/** @param {Theme} t @returns {Color} */
+const halfHover = (t) => {
+  const m = /^#([0-9a-f]{6})([0-9a-f]{2})$/i.exec(t.hover);
+  return m ? /** @type {Color} */ (`#${m[1]}${Math.round(parseInt(m[2], 16) / 2).toString(16).padStart(2, "0")}`) : t.hover;
+};
 // How far the rail fades the creatures of spaces you're not in.
 const RAIL_FADE = 0.5;
 const NAME_IN = PAD + AV + AV_GAP, BRANCH_IN = 20, CHILD_H = TILE - 2;
@@ -573,7 +581,7 @@ export class Sidebar extends View {
           return v_flex().id(`grp-space-${key}`).flex_none().mb(2)
             .on_hover((over, cx) => { const next = over ? key : this.hot === key ? null : this.hot; if (next !== this.hot) { this.hot = next; cx.notify(); } })
             .children(parts.map((pt, p) => round(div().flex_none().when(on, el => el.bg(pt.lit ? t.selected : t.hover)), p).child(
-              round(v_flex().id(`grp-part-${key}-${p}`).when(!pt.lit && last > 0, el => el.hover(s => s.bg(t.hover))), p)
+              round(v_flex().id(`grp-part-${key}-${p}`).when(!pt.lit && last > 0, el => el.hover(s => s.bg(halfHover(t)))), p)
                 .children(pt.els.map(e => e.bg(clear).hover(s => s.bg(clear)).rounded(0))))))
             .when(n === 0 && !r.tree, el => el.relative().child(avatar()));
         });
@@ -602,7 +610,7 @@ export class Sidebar extends View {
             .children(parts.map((pt, i) => {
               const round = (/** @type {any} */ el) => el.when(i === 0, x => x.rounded_t(6)).when(i === last, x => x.rounded_b(6));
               return round(div().flex_none().bg(pt.on ? t.selected : t.hover)).child(
-                round(v_flex().id(`grp-part-${r.w.id}-${i}`).when(!pt.on, el => el.hover(s => s.bg(t.hover))))
+                round(v_flex().id(`grp-part-${r.w.id}-${i}`).when(!pt.on, el => el.hover(s => s.bg(halfHover(t)))))
                   .children(pt.els.map(e => e.bg(clear).hover(s => s.bg(clear)).rounded(0))));
             }))
             .relative().child(avatar())];
@@ -657,7 +665,8 @@ export class Sidebar extends View {
       const newId = `machine-new-${m ?? "local"}`;
       const newHot = this.hotMachine === newId;
       const onNewHover = (over, cx) => { const next = over ? newId : this.hotMachine === newId ? null : this.hotMachine; if (next !== this.hotMachine) { this.hotMachine = next; cx.notify(); } };
-      const slot = () => newMark(newHot ? t.muted : t.dim, MARK);
+      // Sized like the creatures beside it: RAIL_MARK in the rail, AV in the open sidebar.
+      const slot = (/** @type {number} */ size) => newMark(newHot ? t.muted : t.dim, size);
       // Rail: no labels, so no header for the first group and a short rule before each
       // next one (its machine in the tooltip). Folding is the sidebar's: the rail shows all.
       if (collapsed) {
@@ -665,7 +674,7 @@ export class Sidebar extends View {
         const plus = h_flex().id(newId).size(SPACE_H).flex_none().justify_center().items_center().rounded(6)
           .cursor_pointer().hover(s => s.bg(t.hover))
           .tooltip(`New space on ${where}`).on_click(add).on_hover(onNewHover)
-          .child(slot());
+          .child(slot(RAIL_MARK));
         // 5 tall: with the rail's 4 on top, a tile and GAP, its line lands 30 down, on the
         // tab bar's line (TILE + 2 * INSET) when the group above is one tile (as the + is).
         const rule = h_flex().id(id).w(SPACE_H).h(5).flex_none().justify_center().items_center().tooltip(m ?? "This computer")
@@ -690,11 +699,11 @@ export class Sidebar extends View {
           .when(folded || hover, el => el
             .child(svg(`mods/workspace-chrome/chevron-${folded ? "right" : "down"}.svg`).size(11).flex_none().text_color(t.dim)));
       if (rebuilt) return [head];
-      // Sized like a space's row (its creature in a TILE, PAD all round), so it matches the faces.
-      const newRow = h_flex().id(newId).h(TILE).flex_none().mb(2).px(PAD).gap(GAP_NAME).items_center().rounded(6)
+      // Sized like a space with no rows (TILE + CHILD_H, its creature AV), so it matches the faces.
+      const newRow = h_flex().id(newId).h(TILE + CHILD_H).flex_none().mb(2).px(PAD).gap(AV_GAP).items_center().rounded(6)
         .text_size(12.5).text_color(t.muted).cursor_pointer().hover(s => s.bg(t.hover))
         .on_click(add).on_hover(onNewHover)
-        .child(slot())
+        .child(slot(AV))
         .child(div().flex_1().truncate().child("New space"));
       return [head, ...(folded ? [] : mine.length ? mine.flatMap(draw) : loading(m) ? [loadingRow(m)] : empty ? [newRow] : [])];
     });

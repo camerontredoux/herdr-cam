@@ -226,9 +226,6 @@ export function spaceMark(t, s, busy, size = 16) {
         .when(Boolean(busy), el => el.id(/** @type {string} */ (busy)).relative().loop("left", { from: -2.5 * k, to: 0, period: 700 }))));
 }
 
-// The New space mark's outline: the old rounded ghost, drawn as a box so it can be dashed.
-/** @param {import("gpui-kit").Element} el @param {number} k */
-const GHOST = (el, k) => el.w(15 * k).h(16 * k).rounded_t(8 * k).rounded_b(3 * k);
 
 // The creature for a space that isn't there yet ("New space"): the ghost shape as a dashed
 // outline in `color`, no fill, a + in the same color where its eyes go. The outline is its
@@ -236,15 +233,9 @@ const GHOST = (el, k) => el.w(15 * k).h(16 * k).rounded_t(8 * k).rounded_b(3 * k
 // the + is 7 across with a 1 stroke, so it lands on whole pixels.
 /** @param {Color} color @param {number} [size] */
 export function newMark(color, size = 16) {
-  const k = size / 16, arm = 7 * k, w = k;
-  const bar = (/** @type {boolean} */ across) => div().absolute().bg(color)
-    .when(across, el => el.w(arm).h(w).left(0).top((arm - w) / 2))
-    .when(!across, el => el.w(w).h(arm).top(0).left((arm - w) / 2));
-  const shape = GHOST;
-  return h_flex().size(size).flex_none().items_center().justify_center()
-    .child(shape(h_flex().relative().items_center().justify_center(), k)
-      .child(shape(div().absolute().top(0).left(0).border(1.5 * k).border_dashed().border_color(color), k))
-      .child(div().relative().size(arm).child(bar(true)).child(bar(false))));
+  // The creatures' squircle (icons/creatures), dashed, a + where its face would be: the
+  // same size and look as a space's creature, as an empty slot for one.
+  return svg("mods/cam/icons/creatures/new.svg").size(size).flex_none().text_color(color);
 }
 
 // The sidebar's space order, worktrees right after their repo's space: [{ id, group }],
