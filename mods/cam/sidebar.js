@@ -5,7 +5,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, terminals, spaces, machines, panes, run, openOverlay, exec, hc, shared, setShared, watchFolder, window, setAgentOrder } from "herdr";
+import { checking, setBadge, agents, terminals, spaces, machines, panes, run, openOverlay, exec, hc, shared, setShared, watchFolder, window, setAgentOrder } from "herdr";
 import { narrow, agentName, spaceMark, newMark, SPACE_ORDER, sidebarPl, HAIRLINE, sidebarPr, syncRail, RAIL_TILE, RAIL_MARK } from "./shared.js";
 import { TILE, spinner, colors, mono, sidebarEdge } from "./modules/ui/index.js";
 
@@ -72,7 +72,12 @@ export class Sidebar extends View {
     /** @type {Record<string, string>} */
     this.at = {}; // space -> its where() at the last look
     /** @type {Set<string>} */
-    this.watching = new Set(); // local repos' git folders
+    // Local repos' git folders being watched, each with its pending watch to cancel.
+    /** @type {Map<string, import("herdr").FolderWatch | null>} */
+    this.watching = new Map();
+    // The count last put on the Dock icon (setBadge()), to set it only when it changes.
+    /** @type {number | null} */
+    this.badge = null;
     // Spaces made while this runs wait (at most a moment) for their git, so a
     // worktree appears under its repo instead of jumping there.
     this.shown = new Set(spaces().map((s) => s.id));
@@ -91,9 +96,15 @@ export class Sidebar extends View {
     // Per space, its rows' panes in order: a click on the space you're in goes to the next.
     /** @type {Record<string, { pane: string, focused: boolean, tab?: string }[]>} */
     this.cycle = {};
-    // Per space, whether its first row (beside the creature) is the highlighted one.
-    /** @type {Record<string, boolean>} */
-    this.firstLit = {};
+    // Per space, the index of the row you're in among its rows (-1: none).
+    /** @type {Record<string, number>} */
+    this.litAt = {};
+    // This render's project header rows (markHead()).
+    /** @type {Set<any>} */
+    this.heads = new Set();
+    // This render's rows and where a click on each goes, for a project header to go to its first.
+    /** @type {Map<any, any>} */
+    this.targetOf = new Map();
     /** @type {Machine[]} */
     this.machines = [];
     /** @type {Record<string, Reconnect>} */
@@ -103,6 +114,8 @@ export class Sidebar extends View {
     this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
     // Folding spaces is gone: drop what it saved.
     localStorage.removeItem("spaces.folded");
+    // A check (checking()) draws the sidebar once: no ssh, git runs or timers behind it.
+    if (checking()) return;
     this.refreshMachines(cx);
     cx.timer.every(15000, cx => this.refreshMachines(cx));
     // `git status` walks the whole tree, on another machine a process there:
@@ -235,8 +248,11 @@ export class Sidebar extends View {
         this.pending.clear();
         for (const key of keys) await this.check(key, cx);
       }
-      const used = new Set(Object.values(this.git).filter(Boolean).map((g) => JSON.parse(g.repo)).filter(([on]) => !on).map(([, repo]) => repo));
-      for (const repo of this.watching) if (!used.has(repo)) this.watching.delete(repo);
+      // Only the repos an open space is in: a closed space's watch is cancelled, so its repo
+      // stops waking git checks (this.git keeps a closed space's last answer).
+      const ps = panes(), open = new Set(spaces().map(w => where(w, ps)));
+      const used = new Set(Object.entries(this.git).filter(([k, g]) => g && open.has(k)).map(([, g]) => JSON.parse(/** @type {Git} */ (g).repo)).filter(([on]) => !on).map(([, repo]) => repo));
+      for (const [repo, watch] of this.watching) if (!used.has(repo)) { this.watching.delete(repo); watch?.cancel(); }
       this.refreshing = false;
       cx.notify();
     });
@@ -285,19 +301,24 @@ export class Sidebar extends View {
   /** @param {string} repo @param {Cx} cx */
   watch(repo, cx) {
     if (this.watching.has(repo)) return;
-    this.watching.add(repo);
+    this.watching.set(repo, null);
     cx.spawn(async (cx) => {
+      /** @type {import("herdr").FolderWatch | null} */
+      let watch = null;
       try {
-        while (this.watching.has(repo)) {
-          await watchFolder(repo);
+        // Each pass checks the entry is still its own: a cancelled watch's repo can be
+        // opened again (a new loop) before this one hears of the cancel.
+        while (this.watching.has(repo) && this.watching.get(repo) === watch) {
+          watch = watchFolder(repo);
+          this.watching.set(repo, watch);
+          await watch;
           const mine = JSON.stringify([null, repo]);
-          if (this.watching.has(repo)) this.refreshGit(Object.keys(this.git).filter((k) => this.git[k]?.repo === mine), cx);
+          if (this.watching.get(repo) === watch) this.refreshGit(Object.keys(this.git).filter((k) => this.git[k]?.repo === mine), cx);
         }
-      } catch { this.watching.delete(repo); }
+      } catch { if (this.watching.get(repo) === watch) this.watching.delete(repo); }
     });
   }
 
-  /** @param {Space} w */
   /** Goes where a row's click points (`target` below).
    * @param {Space} w its space @param {{ pane: string, tab?: string }} x */
   go(w, x) {
@@ -318,8 +339,15 @@ export class Sidebar extends View {
     for (const w of sp) if (!this.shown.has(w.id) && ready(w)) this.shown.add(w.id);
     const list = sp.map((w, i) => ({ w, i, g: this.git[where(w, ps)] ?? null })).filter((r) => this.shown.has(r.w.id));
     const mains = new Set(list.filter((r) => r.g && !r.g.linked).map((r) => r.g.repo));
+    // A space with a pane in a .treehouse folder is task's (its task worktrees), whatever
+    // repo the task is in: it always goes under the task space, if one is listed.
+    const fm = list.find(r => r.g && !r.g.linked && r.g.name === "task");
     /** @param {SpaceRow} r */
-    const nested = (r) => r.g?.linked && mains.has(r.g.repo);
+    const house = (r) => Boolean(fm) && r !== fm && ps.some(p => p.space === r.w.id && /\/\.treehouse\//.test(p.cwd || ""));
+    /** @param {SpaceRow} r */
+    const nested = (r) => house(r) || (r.g?.linked && mains.has(r.g.repo));
+    /** @param {SpaceRow} r @param {SpaceRow} m */
+    const under = (r, m) => house(r) ? m === fm : r.g?.repo === m.g?.repo;
     /** @type {SpaceRow[]} */
     const out = [];
     const placed = new Set(); // repos whose worktrees are listed (under the first of its spaces)
@@ -328,7 +356,7 @@ export class Sidebar extends View {
       out.push({ ...r, tree: null });
       if (!r.g || r.g.linked || placed.has(r.g.repo)) continue;
       placed.add(r.g.repo);
-      const kids = list.filter((k) => nested(k) && k.g.repo === r.g.repo);
+      const kids = list.filter((k) => nested(k) && under(k, r));
       kids.forEach((k, n) => out.push({ ...k, tree: n === kids.length - 1 ? "└─" : "├─" }));
     }
     return out;
@@ -351,7 +379,7 @@ export class Sidebar extends View {
     const ps = panes();
     const mine = agents().filter(a => a.space === w.id);
     const plain = mine.filter(a => !tasks[a.address]);
-    // Each row's click target, for the space's row to cycle through too.
+    // Each row's click target; the space's row goes to the first.
     /** @type {Map<object, { pane: string, focused: boolean, tab?: string }>} */
     const targets = new Map();
     /** @type {Set<any>} */
@@ -417,6 +445,7 @@ export class Sidebar extends View {
     const line = (a, ...rest) => {
       const el = lineEl(a, ...rest);
       targets.set(el, target(a, rest[4]));
+      this.targetOf.set(el, targets.get(el));
       if (a.focused && w.active) lit.add(el);
       return el;
     };
@@ -478,24 +507,31 @@ export class Sidebar extends View {
       rows[rows.indexOf(name)] = line(shell, name, nested, group[0].program, group.length);
     }
     for (const [project, workers] of byProject) {
-      rows.push(h_flex().id(`sp-fm-${w.id}/${project}`).h(CHILD_H).flex_none().pl(NAME_IN).pr(8).gap(7).items_center()
+      // A worktree's row already shows this name (its branch icon and name): no second header.
+      if (!(nested && project === w.name)) rows.push(this.markHead(h_flex().id(`sp-fm-${w.id}/${project}`).h(CHILD_H).flex_none().pl(NAME_IN).pr(8).gap(7).items_center()
         .child(svg("mods/workspace-chrome/branch.svg").size(13).flex_none().text_color(t.muted))
-        .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(t.foreground).child(project)));
+        .child(div().flex_1().min_w(0).truncate().text_size(12.5).text_color(t.foreground).child(project))));
       for (const a of workers) {
         rows.push(line(a, agentName(a), true, a.program));
       }
     }
     this.cycle[w.id] = rows.map(r => targets.get(r)).filter(x => x !== undefined);
-    // Whether the row beside the creature (the first) is the highlighted one: grouped()
-    // then highlights the space's row with it, so the highlight wraps the whole creature.
-    this.firstLit[w.id] = lit.has(rows[0]);
+    // Which row is the one you're in (-1: none here), for grouped()'s highlight.
+    this.litAt[w.id] = rows.findIndex(r => lit.has(r));
     return rows;
   }
+
+  // A project's header row among a space's rows: in a worktree, grouped() starts a new
+  // section at it, so each project reads as its own block like the worktree's.
+  /** @template T @param {T} el @returns {T} */
+  markHead(el) { this.heads.add(el); return el; }
 
   // The rows, under a header per machine once one isn't this computer.
   /** @param {Theme} t @param {boolean} collapsed */
   grouped(t, collapsed) {
     const rows = this.ordered();
+    this.heads.clear();
+    this.targetOf.clear();
     // An opened space (one showing its agents) gets 4px after its group instead of the list's 2.
     /** @param {SpaceRow} r */
     const draw = (r) => {
@@ -514,21 +550,61 @@ export class Sidebar extends View {
       // Pointer anywhere on the group (this.hot): each of its rows gets the hover shade,
       // square so they join into one block, and the row you're in keeps its highlight (never
       // stacked: the colors are see-through). Pointer elsewhere: only that highlight.
+      // A space or worktree holding task tasks: one block per project: one block per project, the first
+      // under the worktree's own row, each later one under its project's header.
+      const cut = kids.findIndex(k => this.heads.has(k));
+      if (cut >= 0) {
+        /** @type {any[][]} */
+        const sections = [[head, ...kids.slice(0, cut)]];
+        const litEl = kids[this.litAt[r.w.id] ?? -1];
+        for (const k of kids.slice(cut)) this.heads.has(k) ? sections.push([k]) : sections[sections.length - 1].push(k);
+        return sections.map((sec, n) => {
+          // Drawn like a space's group: the header and its first row are one part (one hover,
+          // one highlight, the header's click goes to that row); each later row is its own.
+          // A one-part block's hover is the block's shade alone, as a one-row space's is: a
+          // second layer would make it lighter than the selected shade.
+          const key = `${r.w.id}#${n}`, at = sec.indexOf(litEl), on = this.hot === key || at >= 0;
+          const clear = /** @type {Color} */ ("#00000000");
+          const first = this.targetOf.get(sec[1]);
+          const top = n === 0 ? sec[0] : sec[0].cursor_pointer().on_click(() => first && this.go(r.w, first));
+          const parts = [{ els: [top, ...sec.slice(1, 2)], lit: at === 0 || at === 1 }, ...sec.slice(2).map((e, k) => ({ els: [e], lit: at === k + 2 }))];
+          const last = parts.length - 1;
+          const round = (/** @type {any} */ el, /** @type {number} */ p) => el.when(p === 0, x => x.rounded_t(6)).when(p === last, x => x.rounded_b(6));
+          return v_flex().id(`grp-space-${key}`).flex_none().mb(2)
+            .on_hover((over, cx) => { const next = over ? key : this.hot === key ? null : this.hot; if (next !== this.hot) { this.hot = next; cx.notify(); } })
+            .children(parts.map((pt, p) => round(div().flex_none().when(on, el => el.bg(pt.lit ? t.selected : t.hover)), p).child(
+              round(v_flex().id(`grp-part-${key}-${p}`).when(!pt.lit && last > 0, el => el.hover(s => s.bg(t.hover))), p)
+                .children(pt.els.map(e => e.bg(clear).hover(s => s.bg(clear)).rounded(0))))))
+            .when(n === 0 && !r.tree, el => el.relative().child(avatar()));
+        });
+      }
       if (kids.length > 1) {
         const hot = this.hot === r.w.id;
         const square = (/** @type {any} */ k, /** @type {number} */ j) => j === kids.length - 1 ? k.rounded(0).rounded_b(6) : k.rounded(0);
         // The row beside the creature is highlighted: it and the space's row are one block in
         // its highlight (theirs cleared: the color is see-through), so it wraps the creature.
-        if (!r.tree && this.firstLit[r.w.id]) {
+        // The space you're in, or any space under the pointer: the whole group is one block in the hover shade, and the row
+        // you're in is lit (t.selected) inside it. The space's row and the row beside the
+        // creature are always one part, lit or hovered together, so a highlight wraps the
+        // creature. Only the block's outer corners round.
+        const at = this.litAt[r.w.id] ?? -1;
+        if (!r.tree && (at >= 0 || hot)) {
           const clear = /** @type {Color} */ ("#00000000");
-          const top = v_flex().flex_none().rounded(6).bg(t.selected).when(hot, el => el.rounded(0).rounded_t(6))
-            .child(head.bg(clear).hover(s => s.bg(clear)).rounded(0))
-            .child(kids[0].bg(clear).hover(s => s.bg(clear)).rounded(0));
-          const rest = kids.slice(1);
-          return [v_flex().id(`grp-space-${r.w.id}`).flex_none().mb(2).rounded(6)
+          /** @type {{ els: any[], on: boolean }[]} */
+          const parts = at === 0
+            ? [{ els: [head, kids[0]], on: true }, ...kids.slice(1).map(k => ({ els: [k], on: false }))]
+            : [{ els: [head, kids[0]], on: false }, ...kids.slice(1).map((k, j) => ({ els: [k], on: j + 1 === at }))];
+          const last = parts.length - 1;
+          return [v_flex().id(`grp-space-${r.w.id}`).flex_none().mb(2)
             .on_hover((over, cx) => { const next = over ? r.w.id : this.hot === r.w.id ? null : this.hot; if (next !== this.hot) { this.hot = next; cx.notify(); } })
-            .child(top)
-            .children(hot ? rest.map((k, j) => square(k, j + 1)) : rest)
+            // Each part hovers as one (an inner layer over its shade), so the space's row and
+            // the row beside the creature always light together.
+            .children(parts.map((pt, i) => {
+              const round = (/** @type {any} */ el) => el.when(i === 0, x => x.rounded_t(6)).when(i === last, x => x.rounded_b(6));
+              return round(div().flex_none().bg(pt.on ? t.selected : t.hover)).child(
+                round(v_flex().id(`grp-part-${r.w.id}-${i}`).when(!pt.on, el => el.hover(s => s.bg(t.hover))))
+                  .children(pt.els.map(e => e.bg(clear).hover(s => s.bg(clear)).rounded(0))));
+            }))
             .relative().child(avatar())];
         }
         return [v_flex().id(`grp-space-${r.w.id}`).flex_none().mb(2).rounded(6)
@@ -676,11 +752,9 @@ export class Sidebar extends View {
         this.pressed = null;
         this.over = null;
         if (from !== null && over === i && from !== i) run("space.move", { id: spaces()[from].id, index: i + 1 });
-        // The space you're in: on to its next row (from the one you're in, round to the first).
-        else if (from === i && w.active && this.cycle[w.id]?.length) {
-          const list = this.cycle[w.id], at = list.findIndex(x => x.focused);
-          this.go(w, list[(at + 1) % list.length]);
-        } else if (from === i) run("space.select", { id: w.id });
+        // The space you're in: to its top row.
+        else if (from === i && w.active && this.cycle[w.id]?.length) this.go(w, this.cycle[w.id][0]);
+        else if (from === i) run("space.select", { id: w.id });
         cx.notify();
       })
       .on_mouse_down("right", () => this.menu(w))
@@ -726,6 +800,9 @@ export class Sidebar extends View {
   }
 
   render() {
+    // The Dock icon's badge: how many agents wait on you (blocked). Set when it changes.
+    const waiting = checking() ? 0 : agents().filter(a => a.status === "blocked").length;
+    if (!checking() && waiting !== this.badge) { this.badge = waiting; setBadge(waiting ? String(waiting) : null); }
     const t = colors();
     const collapsed = narrow();
     const palette = ["ansi6", "ansi3", "ansi4", "ansi5", "ansi2", "ansi1"];

@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { props, spaces, panes, agents, run, openOverlay, window, layout, settings, shared, setShared, nextCommand } from "herdr";
+import { checking, props, spaces, panes, agents, run, openOverlay, window, layout, settings, shared, setShared, nextCommand } from "herdr";
 import { find, agentName, toggleSidebar, toggleSidebarHidden, togglePanel, fitPanel, syncPaneArea, navigate, cardWidth, narrow } from "./shared.js";
 import { TILE, ICON, INSET, spinner, colors, bar, barButton, sidebarEdge } from "./modules/ui/index.js";
 import { QUIT, CLOSE_PANE, newMenuHeight, closeTab, renameTab, renameSpace } from "./dialogs.js";
@@ -23,7 +23,8 @@ export class Tabs extends View {
     this.pressed = null;
     /** @type {Record<string, string | null>} */
     this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}");
-    if (props()?.titlebar) startClock(this, cx);
+    // No clock in a check (checking()): it reads the battery with pmset every minute.
+    if (props()?.titlebar && !checking()) startClock(this, cx);
     // Keys (cam.*): the sidebar toggles, Harbor's panel, the dialogs, renames and closes.
     // Only the tab bar's copy answers: it is always shown, while the titlebar strip sits in
     // the sidebar, which can be hidden (and a hidden copy gets no commands).

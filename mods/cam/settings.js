@@ -6,7 +6,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar, InputState, Input, Popup } from "gpui-base";
 import { TILE, ICON, INSET, GAP, row as rowEl, heading as camHeading, spinner, colors } from "./modules/ui/index.js";
-import { hc, run, themes, fonts, updates, telemetry, settings, layouts, shared, appHome, readTextFile, writeTextFile, playSound, props, closeOverlay, openOverlay, window } from "herdr";
+import { checking, hc, run, themes, fonts, updates, telemetry, settings, layouts, shared, appHome, readTextFile, writeTextFile, playSound, props, closeOverlay, openOverlay, window } from "herdr";
 
 /** @typedef {import("./shared.js").Theme} Theme */
 /** @typedef {import("./shared.js").Color} Color */
@@ -90,6 +90,8 @@ export class Settings extends View {
     this.machineNotice = null;
     this.handle = cx.focus_handle();
     this.handle.focus();
+    // A check (checking()) draws the window once: no loading, hc runs or timers behind it.
+    if (checking()) return;
     cx.spawn(async (cx) => {
       await this.load();
       if (this.section === "machines") await this.loadMachines();
@@ -352,6 +354,9 @@ export class Settings extends View {
         // A theme named like a layout (themes/win98.json) is that layout's own.
         /** @type {{ name: string, light: boolean, colors: Theme }[]} */ (themes())
           .filter((x) => Boolean(x.light) === light && (x.name === shared("layout") || !layouts().includes(x.name)))
+          // A check (checking()) has a time limit, and reading every theme's colors can pass
+          // it ("interrupted"): there, a few cards stand for the rest.
+          .slice(0, checking() ? 3 : undefined)
           .map(({ name, colors: c }) => {
           const on = name === current;
           /** @param {Color} color */
