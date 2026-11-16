@@ -79,6 +79,8 @@ Without the file, `cmd-h` does nothing.
 
 Pull the repo and copy the folders again (step 2). Herdr reloads the mod as soon as the files change.
 
+If you change cam in your Herdr folder, `./sync.sh` copies the mods, the layout and the cam key bindings back into this repo so you can commit them. Set `HERDR_HOME` if Herdr's folder is not `~/.config/herdr-app`.
+
 ## Licence
 
 [MIT](LICENSE)
