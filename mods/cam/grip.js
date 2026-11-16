@@ -6,7 +6,7 @@
 // Which card a grip resizes is its `edge` prop (default "sidebar"); the card's sizes, and
 // which side of it the grip is on, are EDGES in shared.js. Double-clicking a grip resets its
 // card to that edge's `reset` width. The panel's grip is inert while the panel shows a page
-// with a fixed width (FIXED in shared.js, Harbor's): it stays as the gap, nothing more.
+// with a fixed width ("panel.fixed" in shared.js, Harbor's): it stays as the gap, nothing more.
 //
 // Two roles, by props:
 // - In the layout (inside the card's wrapper row): the grip. A press opens a transparent

@@ -35,7 +35,10 @@ Use this recipe when the files in this repo don't work on your Herdr version. It
 
 - **Toasts:** cam replaces the shipped toast mod with one in the same style.
 - **Picker (`cmd-p`), palette (`cmd-shift-p`), settings (`cmd-,`) and dialogs:** popups that use the same rows and sizes.
-- **Harbor (`cmd-shift-e`):** a demo panel. It shows mock client requests travelling through stations (Request, Issue, Brief, Working, PR, CI, Preview, Client reply, Merged), and a log of each agent's tool calls.
+- **Moving panes (`cmd-alt-shift-arrows`):** the focused pane swaps with its neighbour in that direction. With no neighbour that way, it moves to that side of the pane beside it, so a stack becomes a row and back.
+- **Clock and battery:** in fullscreen, where macOS hides its menu bar, the strip over the sidebar shows the time and battery level like the menu bar does.
+- **Canvas (`cmd-shift-e`):** opens the herdr-canvas drawing pane on the right of the current tab, or closes it if it's already there.
+- **System monitor (`cmd-h`):** a dialog in the palette's look with htop-style meters for RAM, swap, CPU and each CPU thread. Off unless `data/cam/sysmon.json` names the program to read.
 
 ## Key bindings
 

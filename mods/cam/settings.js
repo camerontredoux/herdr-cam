@@ -6,7 +6,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar, InputState, Input, Popup } from "gpui-base";
 import { TILE, ICON, INSET, GAP, row as rowEl, heading as camHeading, spinner, colors } from "./modules/ui/index.js";
-import { hc, run, themes, fonts, updates, telemetry, settings, layouts, shared, appHome, readTextFile, writeTextFile, playSound, props, closeOverlay, openOverlay, window } from "herdr";
+import { checking, hc, run, themes, fonts, updates, telemetry, settings, layouts, shared, appHome, readTextFile, writeTextFile, playSound, props, closeOverlay, openOverlay, window } from "herdr";
 
 /** @typedef {import("./shared.js").Theme} Theme */
 /** @typedef {import("./shared.js").Color} Color */
@@ -36,7 +36,7 @@ const SECTIONS = [
 ];
 
 /** @type {Record<string, string>} */
-const LOOKS = { main: "Herdr", terminals: "Terminals", win98: "Herdr 98", cam: "Cam" };
+const LOOKS = { main: "Herdr", terminals: "Terminals", win98: "Herdr 98", cam: "Cameron" };
 /** @type {[string | null, string][]} */
 const APPEARANCES = [
   [null, "System"],
@@ -90,6 +90,8 @@ export class Settings extends View {
     this.machineNotice = null;
     this.handle = cx.focus_handle();
     this.handle.focus();
+    // A check (checking()) draws the window once: no loading, hc runs or timers behind it.
+    if (checking()) return;
     cx.spawn(async (cx) => {
       await this.load();
       if (this.section === "machines") await this.loadMachines();
@@ -141,6 +143,22 @@ export class Settings extends View {
     } catch {
       this.person = {};
     }
+  }
+
+  // A setting that multiplies a terminal default (1 when unset, Herdr clamps it to lo..hi):
+  // a stepper by `step`, shown in percent, and Reset to remove it from settings.json.
+  /** @param {Theme} t @param {string} key @param {string} title @param {string} about
+   *  @param {number} lo @param {number} hi @param {number} step */
+  multRow(t, key, title, about, lo, hi, step) {
+    const now = /** @type {number} */ (this.person?.[key] ?? 1);
+    /** @param {number} d @param {Cx} cx */
+    const by = (d, cx) => this.change((q) => {
+      const v = Math.round(Math.max(lo, Math.min(hi, (/** @type {number} */ (q[key]) ?? 1) + d)) * 100) / 100;
+      if (v === 1) delete q[key]; else q[key] = v;
+    }, cx);
+    return this.row(t, title, about, h_flex().gap(8).items_center()
+      .child(this.stepper(t, `st-${key}`, `${Math.round(now * 100)}%`, (_e, cx) => by(-step, cx), (_e, cx) => by(step, cx)))
+      .child(this.button(t, `st-${key}-reset`, "Reset", (_e, cx) => this.change((q) => { delete q[key]; }, cx))));
   }
 
   // Changes settings.json the way an agent would: read, change, write back
@@ -352,6 +370,9 @@ export class Settings extends View {
         // A theme named like a layout (themes/win98.json) is that layout's own.
         /** @type {{ name: string, light: boolean, colors: Theme }[]} */ (themes())
           .filter((x) => Boolean(x.light) === light && (x.name === shared("layout") || !layouts().includes(x.name)))
+          // A check (checking()) has a time limit, and reading every theme's colors can pass
+          // it ("interrupted"): there, a few cards stand for the rest.
+          .slice(0, checking() ? 3 : undefined)
           .map(({ name, colors: c }) => {
           const on = name === current;
           /** @param {Color} color */
@@ -537,7 +558,10 @@ export class Settings extends View {
         ),
       )
       .child(fontRow("font", "font_size", "Terminal font", s.font_family, DEFAULT_FONT, s.font_size))
-      .child(fontRow("ui_font", null, "Interface font", s.ui_font_family, DEFAULT_UI_FONT));
+      .child(fontRow("ui_font", null, "Interface font", s.ui_font_family, DEFAULT_UI_FONT))
+      .child(this.heading(t, "Terminal"))
+      .child(this.multRow(t, "terminal_scroll_speed", "Scroll speed", "How far the wheel and trackpad move a terminal.", 0.1, 5, 0.25))
+      .child(this.multRow(t, "terminal_line_height", "Line height", "Space between a terminal's rows.", 0.8, 2, 0.05));
   }
 
   /** @param {Theme} t */

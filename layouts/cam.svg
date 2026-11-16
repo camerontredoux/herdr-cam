@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 140" width="240" height="140">
-  <!-- The Cam layout: a thin top strip, the spaces sidebar card, the work card
+  <!-- The Cameron layout: a thin top strip, the spaces sidebar card, the work card
        (tab pills, a terminal, a status bar), on the canvas. -->
   <rect width="240" height="140" rx="8" fill="#121212"/>
   <!-- Top strip: traffic lights, sidebar and search buttons. -->

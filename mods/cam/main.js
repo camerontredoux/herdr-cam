@@ -4,17 +4,16 @@
 //   grip     a side card's resize edge, by `edge` (and, with `drag`, its drag overlay)
 //   status   the status bar
 //   picker, menu, new-menu, quit, close-pane   the dialogs (dialogs.js)
-//   harbor   the Harbor panel (modules/harbor); harbor-confirm, its Charter/Dismiss confirm
 //
 // The composition root: the only file that imports a module's entry point. Modules live
-// in ./modules: `ui` (the shared look, everyone's bottom layer) and feature modules like
-// `harbor`, which build on ui only. Removing one is its folder, its line here, and its
-// block in the layout. mods/cam/check-boundaries.sh checks the import rules.
+// in ./modules: `ui` (the shared look, everyone's bottom layer) and any feature modules,
+// which build on ui only. Removing one is its folder, its line here, and its block in the
+// layout. (Harbor was one; it is its own mod now, mods/harbor, and still uses ui.) mods/cam/check-boundaries.sh checks the import rules.
 // Shared sizes and the sidebar toggles live in shared.js. Blocks paint no background of
 // their own: the layout's nodes do, so corners and cards stay theirs.
 import { View } from "gpui-kit";
 import { v_flex } from "gpui-base";
-import { props as herdrProps, shared, setShared, openOverlay } from "herdr";
+import { props as herdrProps, shared, setShared } from "herdr";
 import { Tabs } from "./tabs.js";
 import { Sidebar } from "./sidebar.js";
 import { Grip } from "./grip.js";
@@ -23,26 +22,23 @@ import { Status } from "./status.js";
 import { Picker, Menu, NewMenu, QuitConfirm, ClosePane, Confirm, Prompt } from "./dialogs.js";
 import { Palette } from "./palette.js";
 import { Settings } from "./settings.js";
+import { Sysmon } from "./sysmon.js";
 import { Toasts } from "./toasts.js";
-import { Harbor, ManifestConfirm, CONFIRM_SIZE } from "./modules/harbor/main.js";
-import { FIXED, fitPanel } from "./shared.js";
-
-// Harbor sets its own width (its expand button): the panel card is that plus its 1px
-// border each side, and the expand button refits the panel.
-FIXED.harbor = () => Harbor.width() + 2;
-Harbor.fit = fitPanel;
-// Harbor's Charter and Dismiss ask in a cam dialog.
-Harbor.confirm = (ask) => openOverlay({ mod: "cam", kind: "dialog", ...CONFIRM_SIZE, props: { role: "harbor-confirm", ...ask } });
 
 /** @typedef {import("./shared.js").CamProps} CamProps */
 
 /** @type {Record<string, import("gpui-kit").ViewClass>} */
+// The stand-in pane move-pane.js splits off and closes again within a few frames.
+class Blank extends View { render() { return v_flex(); } }
+
 const ROLES = {
+  // move-pane.js's placeholder.
+  blank: Blank,
   tabs: Tabs, sidebar: Sidebar, grip: Grip, status: Status, pane: Pane,
-  // Modules (./modules).
-  harbor: Harbor, "harbor-confirm": ManifestConfirm,
   // Dialogs (dialogs.js). `mod.open:cam` opens the picker with mod.json's overlay spot.
   picker: Picker, palette: Palette, settings: Settings, toasts: Toasts, menu: Menu, "new-menu": NewMenu, quit: QuitConfirm, confirm: Confirm, prompt: Prompt, "close-pane": ClosePane,
+  // Server usage (sysmon.js, cmd+h).
+  sysmon: Sysmon,
 };
 
 export default class Cam extends View {
