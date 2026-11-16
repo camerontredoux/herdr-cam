@@ -10,7 +10,7 @@ import { div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { View } from "gpui-kit";
 import {
-  agents, spaces, terminals, panes, run, hc, exec, settings, props, closeOverlay, openOverlay,
+  checking, agents, spaces, terminals, panes, run, hc, exec, settings, props, closeOverlay, openOverlay,
   keys, window, knownAgents, shared, setShared, focused, nextCommand, notify,
 } from "herdr";
 import { spaceMark } from "./shared.js";
@@ -81,7 +81,8 @@ export class Picker extends View {
     /** @type {string[]} */
     this.machines = [];
     this.handle = cx.focus_handle();
-    cx.spawn(async cx => {
+    // No hc in a check (checking()): it runs for real there.
+    if (!checking()) cx.spawn(async cx => {
       try {
         const r = await hc(["machine", "ls", "--json"]);
         if (r.code === 0) this.machines = (/** @type {{ machines?: { name: string, state: string, temporary?: boolean }[] }} */ (JSON.parse(r.stdout)).machines ?? []).filter(m => m.state === "connected" && !m.temporary).map(m => m.name);

@@ -12,7 +12,10 @@ Cam is a [Herdr](https://herdr.dev) layout with its own mod. It replaces Herdr's
 - **Dialogs** for renaming, closing panes and quitting.
 - **Toasts** in the same style.
 - **A right-click menu** for terminals (the `cam-menu` mod).
-- **Harbor** (`cmd-shift-e`). A demo panel that shows agents working through client requests. All of its data is made up: see [`mods/cam/modules/harbor/data.js`](mods/cam/modules/harbor/data.js).
+- **Moving panes** (`cmd-alt-shift-arrows`). The focused pane swaps with the pane in that direction. At an edge, it moves to that side, so two stacked panes become side by side.
+- **Clock and battery** in the strip over the sidebar, when the window is fullscreen and macOS hides its menu bar.
+- **Canvas toggle** (`cmd-shift-e`). Opens or closes a drawing pane from [herdr-canvas](https://github.com/camerontredoux/herdr-canvas). Without that mod, the key does nothing.
+- **System monitor** (`cmd-h`). Off by default. It shows RAM, swap and CPU per thread for one machine, read from a program you name. See [Turning on the system monitor](#turning-on-the-system-monitor).
 
 ## Install
 
@@ -32,7 +35,7 @@ Herdr reads mods and layouts from `~/.config/herdr-app`. There's no install comm
    cp layouts/cam.json layouts/cam.svg ~/.config/herdr-app/layouts/
    ```
 
-3. Add the key bindings. Merge each section of `keys.cam.json` (`global`, `mod:cam` and `layout:cam`) into your `~/.config/herdr-app/keys.json`. Check for keys you already use first. The `global` section rebinds `cmd-q`, `cmd-w`, `cmd-p`, `cmd-e` and others.
+3. Add the key bindings. Merge each section of `keys.cam.json` (`global`, `mod:cam` and `layout:cam`) into your `~/.config/herdr-app/keys.json`. Check for keys you already use first. The `global` section rebinds `cmd-q`, `cmd-w`, `cmd-p`, `cmd-e`, `cmd-h` and others.
 
 4. Check that the mod loads:
 
@@ -53,8 +56,24 @@ Herdr mods are trusted code. They can run commands and touch files. Cam does the
 - **Replaces the toast mod.** On every start, Cam writes its own `~/.config/herdr-app/mods/toast/main.js`. It also deletes any `toast-edited*` folders that Herdr leaves after you edit a toast. If you've changed `mods/toast` yourself, those changes are lost.
 - **Runs `git`** in your workspaces' folders. The sidebar uses it to show branch and ahead/behind counts.
 - **Runs Herdr's own `hc machine` commands** to list, add and reconnect remote machines from the sidebar and settings.
+- **Runs `pmset -g batt`** once a minute while the window is fullscreen, for the battery level. `pmset` is macOS only.
+- **Runs the programs in `data/cam/sysmon.json`**, only if you create that file.
 
 It doesn't use the network.
+
+## Turning on the system monitor
+
+The monitor runs a program you supply every 2 seconds and draws its output. Create `~/.config/herdr-app/data/cam/sysmon.json`:
+
+```json
+{ "machine": "my-server", "sysmon": "/path/to/sysmon", "muse": "/path/to/muse-usage" }
+```
+
+- `sysmon` (required): a program that prints memory, CPU and thread counts as JSON when run with `--json`. The `Sample` type at the top of [`mods/cam/sysmon.js`](mods/cam/sysmon.js) gives the shape.
+- `machine` (optional): a herdr-core machine name to run it on. Leave it out to run it on this computer.
+- `muse` (optional): a program that prints token spend as JSON (the `Muse` type). Leave it out to hide the Muse row.
+
+Without the file, `cmd-h` does nothing.
 
 ## Updating
 
